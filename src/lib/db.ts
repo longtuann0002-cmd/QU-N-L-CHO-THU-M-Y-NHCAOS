@@ -336,7 +336,35 @@ async function seedExpenses(expenses: Expense[]): Promise<void> {
   if (error) console.error('[db] seedExpenses error:', error.message);
 }
 
-// ─── Settings (dùng localStorage vì chỉ là config UI) ────────────────────────
-// logoText, logoSubtitle, systemDate, v.v. — vẫn dùng localStorage vì nhẹ và không cần sync đa thiết bị
+// ─── Settings (Đồng bộ đồng thời LocalStorage & Supabase) ────────────────────
 
-export { localLoad as loadSetting, localSave as saveSetting };
+export async function loadSetting<T>(key: string, defaultValue: T): Promise<T> {
+  if (!isSupabaseConfigured()) {
+    return localLoad(key, defaultValue);
+  }
+  try {
+    const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
+    if (error || !data) {
+      // Nếu chưa có trên Supabase, lấy từ localStorage làm fallback và đồng bộ lên
+      const val = localLoad(key, defaultValue);
+      await saveSetting(key, val);
+      return val;
+    }
+    return data.value as T;
+  } catch (err) {
+    console.error(`[db] loadSetting error for ${key}:`, err);
+    return localLoad(key, defaultValue);
+  }
+}
+
+export async function saveSetting<T>(key: string, value: T): Promise<void> {
+  localSave(key, value);
+  if (!isSupabaseConfigured()) return;
+  try {
+    const { error } = await supabase.from('settings').upsert({ key, value });
+    if (error) console.error(`[db] saveSetting error for ${key}:`, error.message);
+  } catch (err) {
+    console.error(`[db] saveSetting error for ${key}:`, err);
+  }
+}
+

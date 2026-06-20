@@ -25,6 +25,8 @@ import {
   deleteContract,
   deleteCustomer,
   deleteExpense,
+  loadSetting,
+  saveSetting,
 } from './lib/db';
 import { isSupabaseConfigured } from './lib/supabase';
 
@@ -198,10 +200,19 @@ export default function App() {
   );
   const [showLogoModal, setShowLogoModal] = useState<boolean>(false);
 
-  // simulated system date for operations & notifications
-  const [systemDate, setSystemDate] = useState<string>(() =>
-    loadStoredData('systemDate', '2026-06-17')
-  );
+  // System date — defaults to actual current date (not hardcoded)
+  const [systemDate, setSystemDate] = useState<string>(() => {
+    const stored = loadStoredData('systemDate', null);
+    if (stored) return stored;
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
+
+  // Realtime clock state — updates every second
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
 
   // Currently focused date — defaults to systemDate, updates to nearest booking once contracts load
   const [selectedDate, setSelectedDate] = useState<string>(systemDate);
@@ -258,17 +269,34 @@ export default function App() {
           throw new Error(errMsg);
         }
 
-        const [cams, cons, custs, exps] = await Promise.all([
+        const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, sDate, rUsers] = await Promise.all([
           fetchCameras(),
           fetchContracts(),
           fetchCustomers(),
           fetchExpenses(),
+          loadSetting('logoText', 'CAMLEASE'),
+          loadSetting('logoSubtitle', 'SYSTEM v1.0'),
+          loadSetting('logoIconType', 'camera'),
+          loadSetting('logoIconColor', '#ea580c'),
+          loadSetting('logoBase64', ''),
+          loadSetting('systemDate', ''),
+          loadSetting('registeredUsers', DEFAULT_USERS),
         ]);
         if (!cancelled) {
           setCameras(cams);
           setContracts(cons);
           setCustomers(custs);
           setExpenses(exps);
+          setLogoText(lText);
+          setLogoSubtitle(lSub);
+          setLogoIconType(lIcon as any);
+          setLogoIconColor(lColor);
+          setLogoBase64(lBase);
+          if (sDate) {
+            setSystemDate(sDate);
+          }
+          setRegisteredUsers(rUsers);
+
           setDbStatus({
             type: 'connected',
             message: 'Đồng bộ Supabase thành công!'
@@ -304,14 +332,20 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Sync settings & auth về localStorage (không cần Supabase) ────────────────
-  useEffect(() => { saveStoredData('systemDate', systemDate); }, [systemDate]);
-  useEffect(() => { saveStoredData('logoText', logoText); }, [logoText]);
-  useEffect(() => { saveStoredData('logoSubtitle', logoSubtitle); }, [logoSubtitle]);
-  useEffect(() => { saveStoredData('logoIconType', logoIconType); }, [logoIconType]);
-  useEffect(() => { saveStoredData('logoIconColor', logoIconColor); }, [logoIconColor]);
-  useEffect(() => { saveStoredData('logoBase64', logoBase64); }, [logoBase64]);
-  useEffect(() => { saveStoredData('registeredUsers', registeredUsers); }, [registeredUsers]);
+  // ── Realtime clock: cập nhật mỗi giây ───────────────────────────────────────
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // ── Sync settings & auth về localStorage & Supabase ─────────────────────────
+  useEffect(() => { saveSetting('systemDate', systemDate); }, [systemDate]);
+  useEffect(() => { saveSetting('logoText', logoText); }, [logoText]);
+  useEffect(() => { saveSetting('logoSubtitle', logoSubtitle); }, [logoSubtitle]);
+  useEffect(() => { saveSetting('logoIconType', logoIconType); }, [logoIconType]);
+  useEffect(() => { saveSetting('logoIconColor', logoIconColor); }, [logoIconColor]);
+  useEffect(() => { saveSetting('logoBase64', logoBase64); }, [logoBase64]);
+  useEffect(() => { saveSetting('registeredUsers', registeredUsers); }, [registeredUsers]);
   useEffect(() => { saveStoredData('currentUser', currentUser); }, [currentUser]);
   useEffect(() => { saveStoredData('camlease_snapshots', snapshots); }, [snapshots]);
 
@@ -1616,28 +1650,46 @@ export default function App() {
               </div>
             </div>
 
-            {/* Trạng thái kết nối cơ sở dữ liệu Supabase */}
-            <div 
-              className={`ml-1 hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold select-none cursor-help transition-all duration-200 ${
-                dbStatus.type === 'connected' 
-                  ? 'bg-emerald-50/80 border-emerald-250 text-emerald-700 shadow-2xs' 
-                  : dbStatus.type === 'error' 
-                    ? 'bg-rose-50/80 border-rose-250 text-rose-700 shadow-2xs' 
-                    : 'bg-amber-50/80 border-amber-250 text-amber-700 shadow-2xs'
-              }`} 
-              title={dbStatus.message}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                dbStatus.type === 'connected' 
-                  ? 'bg-emerald-500 animate-pulse' 
-                  : dbStatus.type === 'error' 
-                    ? 'bg-rose-500' 
-                    : 'bg-amber-500'
-              }`} />
-              <span className="font-sans leading-none tracking-tight">
-                {dbStatus.type === 'connected' ? 'Đồng bộ đám mây (Supabase)' :
-                 dbStatus.type === 'error' ? 'Lỗi kết nối database' : 'Lưu trữ cục bộ (Offline)'}
-              </span>
+            {/* Đồng hồ thời gian thực + Ngày hệ thống */}
+            <div className="hidden lg:flex items-center gap-3 ml-1">
+              {/* Đồng hồ realtime */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span className="font-mono text-[11px] font-bold text-slate-700 leading-none tabular-nums">
+                  {currentDateTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                </span>
+                <span className="text-slate-300 text-[10px] leading-none">|</span>
+                <span className="font-sans text-[10px] font-semibold text-slate-500 leading-none whitespace-nowrap">
+                  {currentDateTime.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </span>
+              </div>
+
+              {/* Trạng thái kết nối cơ sở dữ liệu Supabase */}
+              <div 
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold select-none cursor-help transition-all duration-200 ${
+                  dbStatus.type === 'connected' 
+                    ? 'bg-emerald-50/80 border-emerald-250 text-emerald-700 shadow-2xs' 
+                    : dbStatus.type === 'error' 
+                      ? 'bg-rose-50/80 border-rose-250 text-rose-700 shadow-2xs' 
+                      : 'bg-amber-50/80 border-amber-250 text-amber-700 shadow-2xs'
+                }`} 
+                title={dbStatus.message}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  dbStatus.type === 'connected' 
+                    ? 'bg-emerald-500 animate-pulse' 
+                    : dbStatus.type === 'error' 
+                      ? 'bg-rose-500' 
+                      : 'bg-amber-500'
+                }`} />
+                <span className="font-sans leading-none tracking-tight">
+                  {dbStatus.type === 'connected' ? 'Đồng bộ Supabase' :
+                   dbStatus.type === 'error' ? 'Lỗi kết nối DB' : 'Offline (Local)'}
+                </span>
+              </div>
             </div>
 
             {/* Right Side Header Wrap: Navigation & Notification Center */}

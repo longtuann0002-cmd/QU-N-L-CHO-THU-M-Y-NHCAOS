@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS expenses (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ── 5. Bảng settings (cấu hình hệ thống & logo) ──────────────
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value JSONB NOT NULL
+);
+
 -- ============================================================
 -- Row Level Security (RLS)
 -- App nội bộ: cho phép anon key đọc/ghi tự do
@@ -82,17 +88,20 @@ ALTER TABLE cameras   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings  ENABLE ROW LEVEL SECURITY;
 
 -- Drop cũ nếu tồn tại để tránh lỗi khi chạy lại
 DROP POLICY IF EXISTS "Allow all for anon" ON cameras;
 DROP POLICY IF EXISTS "Allow all for anon" ON customers;
 DROP POLICY IF EXISTS "Allow all for anon" ON contracts;
 DROP POLICY IF EXISTS "Allow all for anon" ON expenses;
+DROP POLICY IF EXISTS "Allow all for anon" ON settings;
 
 CREATE POLICY "Allow all for anon" ON cameras   FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON customers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON contracts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON expenses  FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for anon" ON settings  FOR ALL USING (true) WITH CHECK (true);
 
 -- ============================================================
 -- Index tối ưu truy vấn
@@ -109,3 +118,4 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date        ON expenses(date);
 -- SELECT table_name FROM information_schema.tables
 -- WHERE table_schema = 'public';
 -- ============================================================
+
