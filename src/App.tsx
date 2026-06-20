@@ -8,6 +8,25 @@ import {
   INITIAL_CONTRACTS,
   INITIAL_EXPENSES
 } from './utils/mockData';
+import {
+  fetchCameras,
+  fetchContracts,
+  fetchCustomers,
+  fetchExpenses,
+  upsertCamera,
+  upsertCameras,
+  upsertContract,
+  upsertContracts,
+  upsertCustomer,
+  upsertCustomers,
+  upsertExpense,
+  upsertExpenses,
+  deleteCamera,
+  deleteContract,
+  deleteCustomer,
+  deleteExpense,
+} from './lib/db';
+import { isSupabaseConfigured } from './lib/supabase';
 
 // Component imports
 import BookingCalendar from './components/BookingCalendar';
@@ -137,19 +156,14 @@ export default function App() {
   const [changePasswordError, setChangePasswordError] = useState('');
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
 
-  // Load states from localStorage or use rich mock dataset
-  const [cameras, setCameras] = useState<Camera[]>(() =>
-    loadStoredData('cameras', INITIAL_CAMERAS)
-  );
-  const [contracts, setContracts] = useState<RentalContract[]>(() =>
-    loadStoredData('contracts', INITIAL_CONTRACTS)
-  );
-  const [customers, setCustomers] = useState<Customer[]>(() =>
-    loadStoredData('customers', INITIAL_CUSTOMERS)
-  );
-  const [expenses, setExpenses] = useState<Expense[]>(() =>
-    loadStoredData('expenses', INITIAL_EXPENSES)
-  );
+  // Loading state cho Supabase fetch ban đầu
+  const [dbLoading, setDbLoading] = useState<boolean>(true);
+
+  // Load states — sẽ được populate bởi useEffect async bên dưới
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [contracts, setContracts] = useState<RentalContract[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   // Active view tab state (default to 'calendar' as shown in screenshot)
   const [activeTab, setActiveTab] = useState<'calendar' | 'contracts' | 'equipment' | 'revenue' | 'customers' | 'expenses'>('calendar');
@@ -189,85 +203,73 @@ export default function App() {
     loadStoredData('systemDate', '2026-06-17')
   );
 
-  // Currently focused date highlights (Default to the nearest booking/schedule date relative to systemDate!)
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const loadedContracts = loadStoredData('contracts', INITIAL_CONTRACTS) as RentalContract[];
-    if (!loadedContracts || loadedContracts.length === 0) {
-      return '2026-06-17';
-    }
-    const currentSystemDate = loadStoredData('systemDate', '2026-06-17');
-    const systemTime = new Date(currentSystemDate).getTime();
-    let closestDate = currentSystemDate;
-    let minDiff = Infinity;
+  // Currently focused date — defaults to systemDate, updates to nearest booking once contracts load
+  const [selectedDate, setSelectedDate] = useState<string>(systemDate);
 
-    loadedContracts.forEach((c: RentalContract) => {
+  // ── Fetch dữ liệu ban đầu từ Supabase (hoặc localStorage fallback) ──────────
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAll() {
+      setDbLoading(true);
+      try {
+        const [cams, cons, custs, exps] = await Promise.all([
+          fetchCameras(),
+          fetchContracts(),
+          fetchCustomers(),
+          fetchExpenses(),
+        ]);
+        if (!cancelled) {
+          setCameras(cams);
+          setContracts(cons);
+          setCustomers(custs);
+          setExpenses(exps);
+        }
+      } catch (err) {
+        console.error('[App] loadAll error:', err);
+        // Fallback to localStorage on network failure
+        if (!cancelled) {
+          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));
+          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));
+          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));
+          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));
+        }
+      } finally {
+        if (!cancelled) setDbLoading(false);
+      }
+    }
+    loadAll();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Sync settings & auth về localStorage (không cần Supabase) ────────────────
+  useEffect(() => { saveStoredData('systemDate', systemDate); }, [systemDate]);
+  useEffect(() => { saveStoredData('logoText', logoText); }, [logoText]);
+  useEffect(() => { saveStoredData('logoSubtitle', logoSubtitle); }, [logoSubtitle]);
+  useEffect(() => { saveStoredData('logoIconType', logoIconType); }, [logoIconType]);
+  useEffect(() => { saveStoredData('logoIconColor', logoIconColor); }, [logoIconColor]);
+  useEffect(() => { saveStoredData('logoBase64', logoBase64); }, [logoBase64]);
+  useEffect(() => { saveStoredData('registeredUsers', registeredUsers); }, [registeredUsers]);
+  useEffect(() => { saveStoredData('currentUser', currentUser); }, [currentUser]);
+  useEffect(() => { saveStoredData('camlease_snapshots', snapshots); }, [snapshots]);
+
+  // ── Cập nhật selectedDate về ngày hợp đồng gần nhất sau khi contracts load ──
+  useEffect(() => {
+    if (contracts.length === 0) return;
+    const systemTime = new Date(systemDate).getTime();
+    let closestDate = systemDate;
+    let minDiff = Infinity;
+    contracts.forEach((c: RentalContract) => {
       [c.startDate, c.endDate].forEach(dStr => {
         if (!dStr) return;
         const dTime = new Date(dStr).getTime();
         if (isNaN(dTime)) return;
         const diff = Math.abs(dTime - systemTime);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestDate = dStr;
-        }
+        if (diff < minDiff) { minDiff = diff; closestDate = dStr; }
       });
     });
-
-    return closestDate;
-  });
-
-  // Sync data states to local storage
-  useEffect(() => {
-    saveStoredData('cameras', cameras);
-  }, [cameras]);
-
-  useEffect(() => {
-    saveStoredData('contracts', contracts);
-  }, [contracts]);
-
-  useEffect(() => {
-    saveStoredData('customers', customers);
-  }, [customers]);
-
-  useEffect(() => {
-    saveStoredData('expenses', expenses);
-  }, [expenses]);
-
-  useEffect(() => {
-    saveStoredData('systemDate', systemDate);
-  }, [systemDate]);
-
-  useEffect(() => {
-    saveStoredData('logoText', logoText);
-  }, [logoText]);
-
-  useEffect(() => {
-    saveStoredData('logoSubtitle', logoSubtitle);
-  }, [logoSubtitle]);
-
-  useEffect(() => {
-    saveStoredData('logoIconType', logoIconType);
-  }, [logoIconType]);
-
-  useEffect(() => {
-    saveStoredData('logoIconColor', logoIconColor);
-  }, [logoIconColor]);
-
-  useEffect(() => {
-    saveStoredData('logoBase64', logoBase64);
-  }, [logoBase64]);
-
-  useEffect(() => {
-    saveStoredData('registeredUsers', registeredUsers);
-  }, [registeredUsers]);
-
-  useEffect(() => {
-    saveStoredData('currentUser', currentUser);
-  }, [currentUser]);
-
-  useEffect(() => {
-    saveStoredData('camlease_snapshots', snapshots);
-  }, [snapshots]);
+    setSelectedDate(closestDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contracts.length > 0 ? contracts[0]?.id : null]);
 
   // Operations: BACKUP & RESTORE
   const handleExportBackup = () => {
@@ -397,18 +399,20 @@ export default function App() {
   // Operations: CONTRACTS
   const handleAddContract = (newContract: RentalContract) => {
     setContracts(prev => [newContract, ...prev]);
+    upsertContract(newContract); // sync to Supabase
 
     // Automatically update camera statuses depending on starting date of contract
-    // (If contract starts today, mark cameras as Rented, but actually we maintain dynamically inside lists)
-    setCameras(prevCams =>
-      prevCams.map(cam => {
+    setCameras(prevCams => {
+      const updated = prevCams.map(cam => {
         const isRented = newContract.items.some(item => item.cameraId === cam.id);
         if (isRented && newContract.status === 'Active') {
           return { ...cam, status: 'Rented' as const };
         }
         return cam;
-      })
-    );
+      });
+      upsertCameras(updated); // sync cameras to Supabase
+      return updated;
+    });
 
     // Increment customer count or add new customer if it has been completed
     setCustomers(prevCusts => {
@@ -416,6 +420,7 @@ export default function App() {
         cust => cust.phone === newContract.customerPhone || 
                 cust.name.toLowerCase() === newContract.customerName.toLowerCase()
       );
+      let updated: Customer[];
       if (newContract.status === 'Completed' && !exists) {
         const newCustomer: Customer = {
           id: `cust-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -430,15 +435,19 @@ export default function App() {
             ? `Hồ sơ tự động tạo từ hợp đồng thuê xong ${newContract.contractCode}. Giấy tờ: ${newContract.customerDocNote}`
             : `Hồ sơ tự động tạo từ hợp đồng thuê xong ${newContract.contractCode}.`
         };
-        return [...prevCusts, newCustomer];
+        updated = [...prevCusts, newCustomer];
+        upsertCustomer(newCustomer); // sync to Supabase
+      } else {
+        updated = prevCusts.map(cust => {
+          if (cust.name.toLowerCase() === newContract.customerName.toLowerCase() || cust.phone === newContract.customerPhone) {
+            const updatedCust = { ...cust, rentalCount: cust.rentalCount + 1 };
+            upsertCustomer(updatedCust);
+            return updatedCust;
+          }
+          return cust;
+        });
       }
-
-      return prevCusts.map(cust => {
-        if (cust.name.toLowerCase() === newContract.customerName.toLowerCase() || cust.phone === newContract.customerPhone) {
-          return { ...cust, rentalCount: cust.rentalCount + 1 };
-        }
-        return cust;
-      });
+      return updated;
     });
 
     addToast(
@@ -476,7 +485,6 @@ export default function App() {
                     cust.name.toLowerCase() === c.customerName.toLowerCase()
           );
           if (!exists) {
-            // Count contracts for this customer
             const customerContractsCount = contracts.filter(
               ct => ct.customerPhone === c.customerPhone || 
                     ct.customerName.toLowerCase() === c.customerName.toLowerCase()
@@ -495,6 +503,7 @@ export default function App() {
                 ? `Hồ sơ tự động tạo từ hợp đồng thuê xong ${c.contractCode}. Giấy tờ: ${c.customerDocNote}`
                 : `Hồ sơ tự động tạo từ hợp đồng thuê xong ${c.contractCode}.`
             };
+            upsertCustomer(newCustomer); // sync to Supabase
             return [...prevCusts, newCustomer];
           }
           return prevCusts;
@@ -512,27 +521,33 @@ export default function App() {
             paidAmount: paidAmount !== undefined ? paidAmount : c.paidAmount
           };
 
+          upsertContract(updatedContract); // sync to Supabase
+
           // Adjust camera statuses based on contract transition
           if (status === 'Completed' || status === 'Cancelled') {
-            setCameras(prevCams =>
-              prevCams.map(cam => {
+            setCameras(prevCams => {
+              const updated = prevCams.map(cam => {
                 const wasRented = c.items.some(i => i.cameraId === cam.id);
                 if (wasRented) {
                   return { ...cam, status: 'Available' as const };
                 }
                 return cam;
-              })
-            );
+              });
+              upsertCameras(updated);
+              return updated;
+            });
           } else if (status === 'Active') {
-            setCameras(prevCams =>
-              prevCams.map(cam => {
+            setCameras(prevCams => {
+              const updated = prevCams.map(cam => {
                 const isRented = c.items.some(i => i.cameraId === cam.id);
                 if (isRented) {
                   return { ...cam, status: 'Rented' as const };
                 }
                 return cam;
-              })
-            );
+              });
+              upsertCameras(updated);
+              return updated;
+            });
           }
 
           return updatedContract;
@@ -546,7 +561,9 @@ export default function App() {
     setContracts(prev =>
       prev.map(c => {
         if (c.id === id) {
-          return { ...c, note };
+          const updated = { ...c, note };
+          upsertContract(updated); // sync to Supabase
+          return updated;
         }
         return c;
       })
@@ -557,16 +574,15 @@ export default function App() {
     const contractToDelete = contracts.find(c => c.id === id);
     if (!contractToDelete) return;
 
-    // Remove the contract from the list
     const updatedContracts = contracts.filter(c => c.id !== id);
     setContracts(updatedContracts);
+    deleteContract(id); // sync to Supabase
 
     // Adjust camera statuses based on remaining Active and Overdue contracts
-    setCameras(prevCams =>
-      prevCams.map(cam => {
+    setCameras(prevCams => {
+      const updated = prevCams.map(cam => {
         const wasRented = contractToDelete.items.some(i => i.cameraId === cam.id);
         if (wasRented) {
-          // See if any of the remaining contracts keep this camera rented
           const isStillRented = updatedContracts.some(
             c => (c.status === 'Active' || c.status === 'Overdue') && c.items.some(i => i.cameraId === cam.id)
           );
@@ -575,8 +591,10 @@ export default function App() {
           }
         }
         return cam;
-      })
-    );
+      });
+      upsertCameras(updated);
+      return updated;
+    });
 
     // Decrement customer's rental count
     setCustomers(prevCusts =>
@@ -585,7 +603,9 @@ export default function App() {
           cust.name.toLowerCase() === contractToDelete.customerName.toLowerCase() ||
           cust.phone === contractToDelete.customerPhone
         ) {
-          return { ...cust, rentalCount: Math.max(0, cust.rentalCount - 1) };
+          const updated = { ...cust, rentalCount: Math.max(0, cust.rentalCount - 1) };
+          upsertCustomer(updated);
+          return updated;
         }
         return cust;
       })
@@ -595,36 +615,44 @@ export default function App() {
   // Operations: CAMERAS
   const handleAddCamera = (newCam: Camera) => {
     setCameras(prev => [...prev, newCam]);
+    upsertCamera(newCam); // sync to Supabase
   };
 
   const handleUpdateCamera = (updatedCam: Camera) => {
     setCameras(prev => prev.map(c => (c.id === updatedCam.id ? updatedCam : c)));
+    upsertCamera(updatedCam); // sync to Supabase
   };
 
   const handleDeleteCamera = (id: string) => {
     setCameras(prev => prev.filter(c => c.id !== id));
+    deleteCamera(id); // sync to Supabase
   };
 
   // Operations: CUSTOMERS
   const handleAddCustomer = (newCust: Customer) => {
     setCustomers(prev => [...prev, newCust]);
+    upsertCustomer(newCust); // sync to Supabase
   };
 
   const handleUpdateCustomer = (updatedCust: Customer) => {
     setCustomers(prev => prev.map(c => (c.id === updatedCust.id ? updatedCust : c)));
+    upsertCustomer(updatedCust); // sync to Supabase
   };
 
   const handleDeleteCustomer = (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
+    deleteCustomer(id); // sync to Supabase
   };
 
   // Operations: EXPENSES
   const handleAddExpense = (newExp: Expense) => {
     setExpenses(prev => [newExp, ...prev]);
+    upsertExpense(newExp); // sync to Supabase
   };
 
   const handleDeleteExpense = (id: string) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
+    deleteExpense(id); // sync to Supabase
   };
 
   // Operations: AUTHENTICATION
@@ -883,8 +911,31 @@ export default function App() {
     setStaffError('Đã xóa tài khoản thành công!');
   };
 
+  // Hiển thị màn hình loading khi đang fetch dữ liệu từ Supabase
+  if (dbLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5 select-none">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+            <Aperture className="w-8 h-8 text-white animate-spin" style={{ animationDuration: '2s' }} />
+          </div>
+        </div>
+        <div className="text-center space-y-1.5">
+          <p className="text-white font-bold text-lg tracking-tight">{logoText || 'CAMLEASE'}</p>
+          <p className="text-slate-400 text-sm">Đang kết nối cơ sở dữ liệu...</p>
+        </div>
+        <div className="flex gap-1.5 mt-2">
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+        </div>
+      </div>
+    );
+  }
+
   // If user is not authenticated, render the glorious login experience screen
   if (!currentUser) {
+
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row antialiased relative overflow-hidden select-none">
         
