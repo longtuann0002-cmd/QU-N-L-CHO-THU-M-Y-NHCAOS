@@ -206,12 +206,58 @@ export default function App() {
   // Currently focused date — defaults to systemDate, updates to nearest booking once contracts load
   const [selectedDate, setSelectedDate] = useState<string>(systemDate);
 
+  // Trạng thái kết nối Supabase trực quan
+  const [dbStatus, setDbStatus] = useState<{
+    type: 'connected' | 'offline' | 'error';
+    message?: string;
+  }>(() => {
+    if (!isSupabaseConfigured()) {
+      return { type: 'offline', message: 'Chưa cấu hình biến môi trường Supabase.' };
+    }
+    return { type: 'offline', message: 'Đang kết nối...' };
+  });
+
   // ── Fetch dữ liệu ban đầu từ Supabase (hoặc localStorage fallback) ──────────
   useEffect(() => {
     let cancelled = false;
     async function loadAll() {
       setDbLoading(true);
+      
+      if (!isSupabaseConfigured()) {
+        if (!cancelled) {
+          setDbStatus({
+            type: 'offline',
+            message: 'Chưa cấu hình Supabase. Ứng dụng chạy offline dùng LocalStorage.'
+          });
+          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));
+          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));
+          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));
+          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));
+          setDbLoading(false);
+        }
+        return;
+      }
+
       try {
+        // Kiểm tra kết nối cơ sở dữ liệu thực tế bằng cách query nhanh bảng cameras
+        // Điều này đảm bảo Supabase đã chạy SQL Editor tạo bảng
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+        const cleanUrl = supabaseUrl.endsWith('/') ? supabaseUrl.slice(0, -1) : supabaseUrl;
+        const { error: testError } = await fetch(`${cleanUrl}/rest/v1/cameras?select=id&limit=1`, {
+          headers: {
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY as string}`
+          }
+        }).then(res => res.json().then(data => {
+          if (res.status >= 400) return { error: data };
+          return { error: null };
+        })).catch(err => ({ error: err }));
+
+        if (testError) {
+          const errMsg = testError.message || testError.hint || JSON.stringify(testError);
+          throw new Error(errMsg);
+        }
+
         const [cams, cons, custs, exps] = await Promise.all([
           fetchCameras(),
           fetchContracts(),
@@ -223,15 +269,32 @@ export default function App() {
           setContracts(cons);
           setCustomers(custs);
           setExpenses(exps);
+          setDbStatus({
+            type: 'connected',
+            message: 'Đồng bộ Supabase thành công!'
+          });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('[App] loadAll error:', err);
-        // Fallback to localStorage on network failure
         if (!cancelled) {
           setCameras(loadStoredData('cameras', INITIAL_CAMERAS));
           setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));
           setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));
           setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));
+          
+          let friendlyMsg = err?.message || 'Lỗi không xác định';
+          if (friendlyMsg.includes('relation') && friendlyMsg.includes('does not exist')) {
+            friendlyMsg = 'Bảng cameras chưa được tạo. Hãy chạy file SQL schema trong SQL Editor của Supabase.';
+          } else if (friendlyMsg.includes('Failed to fetch')) {
+            friendlyMsg = 'Không thể kết nối Internet hoặc URL dự án Supabase không hợp lệ.';
+          } else if (friendlyMsg.includes('Invalid API key') || friendlyMsg.includes('JWT')) {
+            friendlyMsg = 'Mã Anon Key của Supabase không hợp lệ hoặc hết hạn.';
+          }
+
+          setDbStatus({
+            type: 'error',
+            message: `Lỗi Supabase: ${friendlyMsg} (Đã chuyển về LocalStorage)`
+          });
         }
       } finally {
         if (!cancelled) setDbLoading(false);
@@ -984,9 +1047,28 @@ export default function App() {
 
           {/* Welcome Message Text Block */}
           <div className="my-6 md:my-0 space-y-4 md:space-y-6 max-w-xl relative z-10 md:mt-auto md:mb-auto pt-4 md:pt-0">
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-bold text-orange-400 border border-orange-500/30 rounded-full bg-orange-500/10 uppercase tracking-widest leading-none">
-              <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" /> Phiên bản máy chủ đám mây bảo mật
-            </span>
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-bold text-orange-400 border border-orange-500/30 rounded-full bg-orange-500/10 uppercase tracking-widest leading-none">
+                <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" /> Phiên bản máy chủ đám mây bảo mật
+              </span>
+              <span 
+                className={`inline-flex items-center gap-1 px-3 py-1 text-[10px] font-bold border rounded-full uppercase tracking-widest leading-none select-none cursor-help ${
+                  dbStatus.type === 'connected' 
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                    : dbStatus.type === 'error'
+                      ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                      : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                }`}
+                title={dbStatus.message}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  dbStatus.type === 'connected' ? 'bg-emerald-400 animate-pulse' :
+                  dbStatus.type === 'error' ? 'bg-rose-400' : 'bg-amber-400'
+                }`} />
+                {dbStatus.type === 'connected' ? 'Supabase connected' :
+                 dbStatus.type === 'error' ? 'Database error' : 'Offline Mode'}
+              </span>
+            </div>
             <div className="space-y-3 md:space-y-4">
               <h2 className="text-2xl sm:text-3xl lg:text-5xl font-display font-black text-white tracking-tight leading-none animate-fade-in">
                 Quản lý Cho thuê <br className="hidden md:inline" /> 
@@ -1532,6 +1614,30 @@ export default function App() {
                   {logoSubtitle || 'SYSTEM v1.0'}
                 </span>
               </div>
+            </div>
+
+            {/* Trạng thái kết nối cơ sở dữ liệu Supabase */}
+            <div 
+              className={`ml-1 hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold select-none cursor-help transition-all duration-200 ${
+                dbStatus.type === 'connected' 
+                  ? 'bg-emerald-50/80 border-emerald-250 text-emerald-700 shadow-2xs' 
+                  : dbStatus.type === 'error' 
+                    ? 'bg-rose-50/80 border-rose-250 text-rose-700 shadow-2xs' 
+                    : 'bg-amber-50/80 border-amber-250 text-amber-700 shadow-2xs'
+              }`} 
+              title={dbStatus.message}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                dbStatus.type === 'connected' 
+                  ? 'bg-emerald-500 animate-pulse' 
+                  : dbStatus.type === 'error' 
+                    ? 'bg-rose-500' 
+                    : 'bg-amber-500'
+              }`} />
+              <span className="font-sans leading-none tracking-tight">
+                {dbStatus.type === 'connected' ? 'Đồng bộ đám mây (Supabase)' :
+                 dbStatus.type === 'error' ? 'Lỗi kết nối database' : 'Lưu trữ cục bộ (Offline)'}
+              </span>
             </div>
 
             {/* Right Side Header Wrap: Navigation & Notification Center */}
