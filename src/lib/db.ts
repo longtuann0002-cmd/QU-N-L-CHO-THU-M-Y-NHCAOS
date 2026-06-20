@@ -338,19 +338,36 @@ async function seedExpenses(expenses: Expense[]): Promise<void> {
 
 // ─── Settings (Đồng bộ đồng thời LocalStorage & Supabase) ────────────────────
 
+/**
+ * Tải một setting từ Supabase (ưu tiên) hoặc localStorage (fallback).
+ * KHÔNG ghi đè Supabase bằng localStorage nếu row đã tồn tại —
+ * điều này đảm bảo dữ liệu cloud không bị mất khi mở trên domain/trình duyệt mới.
+ */
 export async function loadSetting<T>(key: string, defaultValue: T): Promise<T> {
+  // Luôn lưu vào localStorage để dùng offline
   if (!isSupabaseConfigured()) {
     return localLoad(key, defaultValue);
   }
   try {
-    const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
-    if (error || !data) {
-      // Nếu chưa có trên Supabase, lấy từ localStorage làm fallback và đồng bộ lên
-      const val = localLoad(key, defaultValue);
-      await saveSetting(key, val);
-      return val;
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', key)
+      .maybeSingle(); // maybeSingle: trả null thay vì lỗi khi không có row
+
+    if (!error && data) {
+      // Có trên Supabase → đồng bộ xuống localStorage và trả về
+      localSave(key, data.value as T);
+      return data.value as T;
     }
-    return data.value as T;
+
+    // Không có trên Supabase → lấy từ localStorage rồi seed lên (lần đầu tiên)
+    const localVal = localLoad(key, defaultValue);
+    // Seed lên Supabase mà KHÔNG overwrite nếu đã tồn tại (INSERT với onConflict: ignore)
+    await supabase
+      .from('settings')
+      .upsert({ key, value: localVal }, { onConflict: 'key', ignoreDuplicates: true });
+    return localVal;
   } catch (err) {
     console.error(`[db] loadSetting error for ${key}:`, err);
     return localLoad(key, defaultValue);
@@ -358,6 +375,7 @@ export async function loadSetting<T>(key: string, defaultValue: T): Promise<T> {
 }
 
 export async function saveSetting<T>(key: string, value: T): Promise<void> {
+  // Luôn lưu localStorage trước
   localSave(key, value);
   if (!isSupabaseConfigured()) return;
   try {
@@ -368,3 +386,30 @@ export async function saveSetting<T>(key: string, value: T): Promise<void> {
   }
 }
 
+/**
+ * Gọi một lần sau khi kết nối Supabase thành công lần đầu.
+ * Đẩy tất cả settings có trong localStorage lên Supabase
+ * chỉ khi chưa có row tương ứng trên cloud (ignoreDuplicates).
+ * Giúp migrate dữ liệu cũ từ local lên cloud mà không ghi đè.
+ */
+export async function seedSettingsFromLocal(keys: string[]): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const rows = keys
+      .map(key => {
+        const value = localLoad<any>(key, null);
+        if (value === null) return null;
+        return { key, value };
+      })
+      .filter(Boolean) as { key: string; value: any }[];
+
+    if (rows.length === 0) return;
+
+    const { error } = await supabase
+      .from('settings')
+      .upsert(rows, { onConflict: 'key', ignoreDuplicates: true });
+    if (error) console.error('[db] seedSettingsFromLocal error:', error.message);
+  } catch (err) {
+    console.error('[db] seedSettingsFromLocal error:', err);
+  }
+}

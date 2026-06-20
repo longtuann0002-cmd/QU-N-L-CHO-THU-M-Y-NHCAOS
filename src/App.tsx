@@ -27,6 +27,7 @@ import {
   deleteExpense,
   loadSetting,
   saveSetting,
+  seedSettingsFromLocal,
 } from './lib/db';
 import { isSupabaseConfigured } from './lib/supabase';
 
@@ -281,6 +282,11 @@ export default function App() {
           const errMsg = testError.message || testError.hint || JSON.stringify(testError);
           throw new Error(errMsg);
         }
+
+        // Migrate settings từ localStorage lên Supabase lần đầu (không ghi đè nếu đã có)
+        await seedSettingsFromLocal([
+          'logoText', 'logoSubtitle', 'logoIconType', 'logoIconColor', 'logoBase64', 'registeredUsers'
+        ]);
 
         const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, rUsers] = await Promise.all([
           fetchCameras(),
