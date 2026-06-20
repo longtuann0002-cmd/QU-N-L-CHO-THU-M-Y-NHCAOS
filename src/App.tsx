@@ -202,14 +202,27 @@ export default function App() {
 
   // System date — defaults to actual current date (not hardcoded)
   const [systemDate, setSystemDate] = useState<string>(() => {
-    const stored = loadStoredData('systemDate', null);
-    if (stored) return stored;
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
   });
+  const [isDateSimulated, setIsDateSimulated] = useState<boolean>(false);
+
+  const handleUpdateSystemDate = (newDate: string) => {
+    setSystemDate(newDate);
+    setIsDateSimulated(true);
+  };
+
+  const handleResetSystemDate = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    setSystemDate(`${yyyy}-${mm}-${dd}`);
+    setIsDateSimulated(false);
+  };
 
   // Realtime clock state — updates every second
   const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
@@ -269,7 +282,7 @@ export default function App() {
           throw new Error(errMsg);
         }
 
-        const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, sDate, rUsers] = await Promise.all([
+        const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, rUsers] = await Promise.all([
           fetchCameras(),
           fetchContracts(),
           fetchCustomers(),
@@ -279,7 +292,6 @@ export default function App() {
           loadSetting('logoIconType', 'camera'),
           loadSetting('logoIconColor', '#ea580c'),
           loadSetting('logoBase64', ''),
-          loadSetting('systemDate', ''),
           loadSetting('registeredUsers', DEFAULT_USERS),
         ]);
         if (!cancelled) {
@@ -292,10 +304,15 @@ export default function App() {
           setLogoIconType(lIcon as any);
           setLogoIconColor(lColor);
           setLogoBase64(lBase);
-          if (sDate) {
-            setSystemDate(sDate);
-          }
           setRegisteredUsers(rUsers);
+
+          // Đồng bộ thông tin currentUser từ danh sách registeredUsers mới nhất
+          if (currentUser) {
+            const freshUser = rUsers.find(u => u.id === currentUser.id);
+            if (freshUser) {
+              setCurrentUser(freshUser);
+            }
+          }
 
           setDbStatus({
             type: 'connected',
@@ -338,14 +355,50 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // ── Tự động cập nhật ngày hệ thống theo thời gian thực nếu không giả lập ───
+  useEffect(() => {
+    if (!isDateSimulated) {
+      const yyyy = currentDateTime.getFullYear();
+      const mm = String(currentDateTime.getMonth() + 1).padStart(2, '0');
+      const dd = String(currentDateTime.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+      if (systemDate !== todayStr) {
+        setSystemDate(todayStr);
+      }
+    }
+  }, [currentDateTime, isDateSimulated, systemDate]);
+
   // ── Sync settings & auth về localStorage & Supabase ─────────────────────────
-  useEffect(() => { saveSetting('systemDate', systemDate); }, [systemDate]);
-  useEffect(() => { saveSetting('logoText', logoText); }, [logoText]);
-  useEffect(() => { saveSetting('logoSubtitle', logoSubtitle); }, [logoSubtitle]);
-  useEffect(() => { saveSetting('logoIconType', logoIconType); }, [logoIconType]);
-  useEffect(() => { saveSetting('logoIconColor', logoIconColor); }, [logoIconColor]);
-  useEffect(() => { saveSetting('logoBase64', logoBase64); }, [logoBase64]);
-  useEffect(() => { saveSetting('registeredUsers', registeredUsers); }, [registeredUsers]);
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoText', logoText);
+  }, [logoText, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoSubtitle', logoSubtitle);
+  }, [logoSubtitle, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoIconType', logoIconType);
+  }, [logoIconType, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoIconColor', logoIconColor);
+  }, [logoIconColor, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoBase64', logoBase64);
+  }, [logoBase64, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('registeredUsers', registeredUsers);
+  }, [registeredUsers, dbLoading]);
+
   useEffect(() => { saveStoredData('currentUser', currentUser); }, [currentUser]);
   useEffect(() => { saveStoredData('camlease_snapshots', snapshots); }, [snapshots]);
 
@@ -418,7 +471,10 @@ export default function App() {
       if (Array.isArray(parsed.customers)) setCustomers(parsed.customers);
       if (Array.isArray(parsed.expenses)) setExpenses(parsed.expenses);
       if (Array.isArray(parsed.registeredUsers)) setRegisteredUsers(parsed.registeredUsers);
-      if (parsed.systemDate) setSystemDate(parsed.systemDate);
+      if (parsed.systemDate) {
+        setSystemDate(parsed.systemDate);
+        setIsDateSimulated(true);
+      }
       if (parsed.logoText !== undefined) setLogoText(parsed.logoText);
       if (parsed.logoSubtitle !== undefined) setLogoSubtitle(parsed.logoSubtitle);
       if (parsed.logoIconType !== undefined) setLogoIconType(parsed.logoIconType);
@@ -475,7 +531,10 @@ export default function App() {
       if (Array.isArray(data.customers)) setCustomers(data.customers);
       if (Array.isArray(data.expenses)) setExpenses(data.expenses);
       if (Array.isArray(data.registeredUsers)) setRegisteredUsers(data.registeredUsers);
-      if (snap.systemDate) setSystemDate(snap.systemDate);
+      if (snap.systemDate) {
+        setSystemDate(snap.systemDate);
+        setIsDateSimulated(true);
+      }
       if (data.logoText !== undefined) setLogoText(data.logoText);
       if (data.logoSubtitle !== undefined) setLogoSubtitle(data.logoSubtitle);
       if (data.logoIconType !== undefined) setLogoIconType(data.logoIconType);
@@ -1787,7 +1846,9 @@ export default function App() {
                 cameras={cameras}
                 onUpdateContractStatus={handleUpdateContractStatus}
                 systemDate={systemDate}
-                setSystemDate={setSystemDate}
+                setSystemDate={handleUpdateSystemDate}
+                isDateSimulated={isDateSimulated}
+                onResetSystemDate={handleResetSystemDate}
               />
 
               {/* User Account/Profile dropdown menu */}
