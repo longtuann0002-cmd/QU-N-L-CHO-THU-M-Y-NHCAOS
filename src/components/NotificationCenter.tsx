@@ -17,7 +17,8 @@ import {
   Info,
   ExternalLink,
   Sliders,
-  DollarSign
+  DollarSign,
+  RefreshCw
 } from 'lucide-react';
 
 interface NotificationCenterProps {
@@ -26,6 +27,8 @@ interface NotificationCenterProps {
   onUpdateContractStatus: (id: string, status: ContractStatus, note?: string, paidAmount?: number) => void;
   systemDate: string;
   setSystemDate: (date: string) => void;
+  isDateSimulated?: boolean;
+  onResetSystemDate?: () => void;
 }
 
 export default function NotificationCenter({
@@ -33,7 +36,9 @@ export default function NotificationCenter({
   cameras,
   onUpdateContractStatus,
   systemDate,
-  setSystemDate
+  setSystemDate,
+  isDateSimulated = false,
+  onResetSystemDate
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -326,6 +331,16 @@ export default function NotificationCenter({
                         className="bg-transparent border-0 p-0 text-xs text-gray-950 font-bold focus:ring-0 uppercase cursor-pointer"
                         title="Thay đổi ngày hiện tại để kiểm tra thông báo nhắc nhở ngày khác"
                       />
+                      {isDateSimulated && onResetSystemDate && (
+                        <button
+                          type="button"
+                          onClick={onResetSystemDate}
+                          className="p-0.5 text-orange-600 hover:text-orange-800 hover:bg-orange-100/50 rounded transition shrink-0 ml-0.5 cursor-pointer flex items-center justify-center"
+                          title="Quay lại ngày thực tế"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
 
                     <button
@@ -489,7 +504,7 @@ export default function NotificationCenter({
                                   📷 {it.cameraName}
                                 </span>
                                 <span className="font-mono text-gray-500 text-[10px]">
-                                  ({it.quantity} chiếc) • {Math.round(it.dailyRate).toLocaleString()}đ/ngày
+                                  ({it.quantity} chiếc) • {(it.dailyRate).toLocaleString()}đ/ngày
                                 </span>
                               </div>
                             ))}

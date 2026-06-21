@@ -444,8 +444,8 @@ export default function BookingCalendar({
             </div>
             <div className="min-w-0 flex-1">
               <h3 className="font-extrabold text-[11px] sm:text-xs text-gray-900 truncate leading-tight" title={cam.name}>{cam.name}</h3>
-              <p className="text-[9px] sm:text-[10px] opacity-80 font-medium font-mono mt-0.5 truncate leading-normal">{cam.serialNumber}</p>
-              <p className="text-[10px] sm:text-[11px] font-bold mt-1 flex items-center gap-1 leading-normal">
+              <p className="text-[9px] sm:text-[10px] opacity-80 font-medium font-mono mt-0.5 truncate leading-none">{cam.serialNumber}</p>
+              <p className="text-[10px] sm:text-[11px] font-bold mt-1 flex items-center gap-1 leading-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-current inline-block shrink-0 animate-pulse"></span>
                 <span className="truncate">{cam.statusText}</span>
               </p>
@@ -879,7 +879,7 @@ export default function BookingCalendar({
                             {formData.is6Hours 
                               ? `${(cam.price6Hours ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.6)).toLocaleString()}đ/6h` 
                               : (calculatedDays > 0 
-                                ? `${Math.round(getCameraRateForDuration(cam, calculatedDays, false)).toLocaleString()}đ/ngày (${calculatedDays}n)` 
+                                ? `${getCameraRateForDuration(cam, calculatedDays, false).toLocaleString()}đ/ngày (${calculatedDays}n)` 
                                 : `${(cam.price1Day ?? cam.dailyRate).toLocaleString()}đ/ngày`
                               )
                             }
