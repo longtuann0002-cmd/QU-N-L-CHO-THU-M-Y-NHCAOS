@@ -17,14 +17,27 @@ const envKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
 export let supabaseUrl = savedUrl || envUrl || '';
 export let supabaseAnonKey = savedKey || envKey || '';
 
+export function sanitizeSupabaseUrl(url: string): string {
+  let cleanUrl = url.trim();
+  // Remove trailing slashes
+  cleanUrl = cleanUrl.replace(/\/+$/, '');
+  // Remove /rest/v1 or /rest/v1/ if present at the end
+  if (cleanUrl.endsWith('/rest/v1')) {
+    cleanUrl = cleanUrl.slice(0, -8);
+  }
+  cleanUrl = cleanUrl.replace(/\/+$/, '');
+  return cleanUrl;
+}
+
 export function checkIsConfigured(url = supabaseUrl, key = supabaseAnonKey): boolean {
+  const cleanUrl = sanitizeSupabaseUrl(url);
   return !!(
-    url &&
+    cleanUrl &&
     key &&
-    url !== 'YOUR_SUPABASE_URL' &&
-    url !== 'YOUR_SUPABASE_URL_HERE' &&
-    !url.toLowerCase().includes('placeholder') &&
-    url.startsWith('https://')
+    cleanUrl !== 'YOUR_SUPABASE_URL' &&
+    cleanUrl !== 'YOUR_SUPABASE_URL_HERE' &&
+    !cleanUrl.toLowerCase().includes('placeholder') &&
+    cleanUrl.startsWith('https://')
   );
 }
 
@@ -33,7 +46,7 @@ export let isSupabaseConfigured = checkIsConfigured();
 
 // Initialize Supabase client dynamically
 export let supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(sanitizeSupabaseUrl(supabaseUrl), supabaseAnonKey)
   : null;
 
 /**
@@ -41,12 +54,12 @@ export let supabase: SupabaseClient | null = isSupabaseConfigured
  */
 export function updateSupabaseConfig(url: string, key: string): boolean {
   try {
-    const trimmedUrl = url.trim();
+    const cleanUrl = sanitizeSupabaseUrl(url);
     const trimmedKey = key.trim();
-    const configured = checkIsConfigured(trimmedUrl, trimmedKey);
+    const configured = checkIsConfigured(cleanUrl, trimmedKey);
     
     if (configured) {
-      supabaseUrl = trimmedUrl;
+      supabaseUrl = cleanUrl;
       supabaseAnonKey = trimmedKey;
       localStorage.setItem('camlease_supabase_url', supabaseUrl);
       localStorage.setItem('camlease_supabase_key', supabaseAnonKey);
@@ -75,11 +88,12 @@ export function updateSupabaseConfig(url: string, key: string): boolean {
  */
 export async function testSupabaseConnection(url: string, key: string): Promise<{ success: boolean; message: string }> {
   try {
-    if (!checkIsConfigured(url, key)) {
+    const cleanUrl = sanitizeSupabaseUrl(url);
+    if (!checkIsConfigured(cleanUrl, key)) {
       return { success: false, message: 'Thông tin cấu hình không hợp lệ. URL phải bắt đầu bằng https://' };
     }
     
-    const tempClient = createClient(url.trim(), key.trim());
+    const tempClient = createClient(cleanUrl, key.trim());
     const { data, error } = await tempClient
       .from('camlease_store')
       .select('key')
