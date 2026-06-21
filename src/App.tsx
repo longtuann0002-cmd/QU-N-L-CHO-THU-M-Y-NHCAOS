@@ -8,8 +8,29 @@ import {
   INITIAL_CONTRACTS,
   INITIAL_EXPENSES
 } from './utils/mockData';
-import { isSupabaseConfigured, syncToSupabase, fetchFromSupabase } from './utils/supabase.ts';
-
+import {
+  fetchCameras,
+  fetchContracts,
+  fetchCustomers,
+  fetchExpenses,
+  upsertCamera,
+  upsertCameras,
+  upsertContract,
+  upsertContracts,
+  upsertCustomer,
+  upsertCustomers,
+  upsertExpense,
+  upsertExpenses,
+  deleteCamera,
+  deleteContract,
+  deleteCustomer,
+  deleteExpense,
+  loadSetting,
+  saveSetting,
+  seedSettingsFromLocal,
+  syncLocalDataToSupabase,
+} from './lib/db';
+import { isSupabaseConfigured } from './lib/supabase';
 
 // Component imports
 import BookingCalendar from './components/BookingCalendar';
@@ -139,19 +160,14 @@ export default function App() {
   const [changePasswordError, setChangePasswordError] = useState('');
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
 
-  // Load states from localStorage or use rich mock dataset
-  const [cameras, setCameras] = useState<Camera[]>(() =>
-    loadStoredData('cameras', INITIAL_CAMERAS)
-  );
-  const [contracts, setContracts] = useState<RentalContract[]>(() =>
-    loadStoredData('contracts', INITIAL_CONTRACTS)
-  );
-  const [customers, setCustomers] = useState<Customer[]>(() =>
-    loadStoredData('customers', INITIAL_CUSTOMERS)
-  );
-  const [expenses, setExpenses] = useState<Expense[]>(() =>
-    loadStoredData('expenses', INITIAL_EXPENSES)
-  );
+  // Loading state cho Supabase fetch ban đầu
+  const [dbLoading, setDbLoading] = useState<boolean>(true);
+
+  // Load states — sẽ được populate bởi useEffect async bên dưới
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [contracts, setContracts] = useState<RentalContract[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   // Active view tab state (default to 'calendar' as shown in screenshot)
   const [activeTab, setActiveTab] = useState<'calendar' | 'contracts' | 'equipment' | 'revenue' | 'customers' | 'expenses'>('calendar');
@@ -186,147 +202,254 @@ export default function App() {
   );
   const [showLogoModal, setShowLogoModal] = useState<boolean>(false);
 
-  // simulated system date for operations & notifications
-  const [systemDate, setSystemDate] = useState<string>(() =>
-    loadStoredData('systemDate', '2026-06-17')
-  );
+  // System date — defaults to actual current date (not hardcoded)
+  const [systemDate, setSystemDate] = useState<string>(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
+  const [isDateSimulated, setIsDateSimulated] = useState<boolean>(false);
 
-  // Currently focused date highlights (Default to the nearest booking/schedule date relative to systemDate!)
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const loadedContracts = loadStoredData('contracts', INITIAL_CONTRACTS) as RentalContract[];
-    if (!loadedContracts || loadedContracts.length === 0) {
-      return '2026-06-17';
+  const handleUpdateSystemDate = (newDate: string) => {
+    setSystemDate(newDate);
+    setIsDateSimulated(true);
+  };
+
+  const handleResetSystemDate = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    setSystemDate(`${yyyy}-${mm}-${dd}`);
+    setIsDateSimulated(false);
+  };
+
+  // Realtime clock state — updates every second
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
+
+  // Currently focused date — defaults to systemDate, updates to nearest booking once contracts load
+  const [selectedDate, setSelectedDate] = useState<string>(systemDate);
+
+  // Trạng thái kết nối Supabase trực quan
+  const [dbStatus, setDbStatus] = useState<{
+    type: 'connected' | 'offline' | 'error';
+    message?: string;
+  }>(() => {
+    if (!isSupabaseConfigured()) {
+      return { type: 'offline', message: 'Chưa cấu hình biến môi trường Supabase.' };
     }
-    const currentSystemDate = loadStoredData('systemDate', '2026-06-17');
-    const systemTime = new Date(currentSystemDate).getTime();
-    let closestDate = currentSystemDate;
-    let minDiff = Infinity;
+    return { type: 'offline', message: 'Đang kết nối...' };
+  });
 
-    loadedContracts.forEach((c: RentalContract) => {
+  // ── Fetch dữ liệu ban đầu từ Supabase (hoặc localStorage fallback) ──────────
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAll() {
+      setDbLoading(true);
+      
+      if (!isSupabaseConfigured()) {
+        if (!cancelled) {
+          setDbStatus({
+            type: 'offline',
+            message: 'Chưa cấu hình Supabase. Ứng dụng chạy offline dùng LocalStorage.'
+          });
+          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));
+          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));
+          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));
+          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));
+          setDbLoading(false);
+        }
+        return;
+      }
+
+      try {
+        // Kiểm tra kết nối cơ sở dữ liệu thực tế bằng cách query nhanh bảng cameras
+        // Điều này đảm bảo Supabase đã chạy SQL Editor tạo bảng
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+        const cleanUrl = supabaseUrl.endsWith('/') ? supabaseUrl.slice(0, -1) : supabaseUrl;
+        const { error: testError } = await fetch(`${cleanUrl}/rest/v1/cameras?select=id&limit=1`, {
+          headers: {
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY as string}`
+          }
+        }).then(res => res.json().then(data => {
+          if (res.status >= 400) return { error: data };
+          return { error: null };
+        })).catch(err => ({ error: err }));
+
+        if (testError) {
+          const errMsg = testError.message || testError.hint || JSON.stringify(testError);
+          throw new Error(errMsg);
+        }
+
+        // Migrate settings từ localStorage lên Supabase lần đầu (không ghi đè nếu đã có)
+        await seedSettingsFromLocal([
+          'logoText', 'logoSubtitle', 'logoIconType', 'logoIconColor', 'logoBase64', 'registeredUsers'
+        ]);
+        // Đồng bộ dữ liệu nghiệp vụ (cameras, contracts, customers, expenses) từ local lên cloud
+        await syncLocalDataToSupabase();
+
+        const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, rUsers] = await Promise.all([
+          fetchCameras(),
+          fetchContracts(),
+          fetchCustomers(),
+          fetchExpenses(),
+          loadSetting('logoText', 'CAMLEASE'),
+          loadSetting('logoSubtitle', 'SYSTEM v1.0'),
+          loadSetting('logoIconType', 'camera'),
+          loadSetting('logoIconColor', '#ea580c'),
+          loadSetting('logoBase64', ''),
+          loadSetting('registeredUsers', DEFAULT_USERS),
+        ]);
+        if (!cancelled) {
+          setCameras(cams);
+          setContracts(cons);
+          setCustomers(custs);
+          setExpenses(exps);
+          setLogoText(lText);
+          setLogoSubtitle(lSub);
+          setLogoIconType(lIcon as any);
+          setLogoIconColor(lColor);
+          setLogoBase64(lBase);
+          setRegisteredUsers(rUsers);
+
+          // Đồng bộ thông tin currentUser từ danh sách registeredUsers mới nhất
+          if (currentUser) {
+            const freshUser = rUsers.find(u => u.id === currentUser.id);
+            if (freshUser) {
+              setCurrentUser(freshUser);
+            }
+          }
+
+          setDbStatus({
+            type: 'connected',
+            message: 'Đồng bộ Supabase thành công!'
+          });
+        }
+      } catch (err: any) {
+        console.error('[App] loadAll error:', err);
+        if (!cancelled) {
+          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));
+          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));
+          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));
+          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));
+          
+          let friendlyMsg = err?.message || 'Lỗi không xác định';
+          if (friendlyMsg.includes('relation') && friendlyMsg.includes('does not exist')) {
+            friendlyMsg = 'Bảng cameras chưa được tạo. Hãy chạy file SQL schema trong SQL Editor của Supabase.';
+          } else if (friendlyMsg.includes('Failed to fetch')) {
+            friendlyMsg = 'Không thể kết nối Internet hoặc URL dự án Supabase không hợp lệ.';
+          } else if (friendlyMsg.includes('Invalid API key') || friendlyMsg.includes('JWT')) {
+            friendlyMsg = 'Mã Anon Key của Supabase không hợp lệ hoặc hết hạn.';
+          }
+
+          setDbStatus({
+            type: 'error',
+            message: `Lỗi Supabase: ${friendlyMsg} (Đã chuyển về LocalStorage)`
+          });
+        }
+      } finally {
+        if (!cancelled) setDbLoading(false);
+      }
+    }
+    loadAll();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Realtime clock: cập nhật mỗi giây ───────────────────────────────────────
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // ── Tự động cập nhật ngày hệ thống theo thời gian thực nếu không giả lập ───
+  useEffect(() => {
+    if (!isDateSimulated) {
+      const yyyy = currentDateTime.getFullYear();
+      const mm = String(currentDateTime.getMonth() + 1).padStart(2, '0');
+      const dd = String(currentDateTime.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+      if (systemDate !== todayStr) {
+        setSystemDate(todayStr);
+      }
+    }
+  }, [currentDateTime, isDateSimulated, systemDate]);
+
+  // ── Sync settings & auth về localStorage & Supabase ─────────────────────────
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoText', logoText);
+  }, [logoText, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoSubtitle', logoSubtitle);
+  }, [logoSubtitle, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoIconType', logoIconType);
+  }, [logoIconType, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoIconColor', logoIconColor);
+  }, [logoIconColor, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('logoBase64', logoBase64);
+  }, [logoBase64, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveSetting('registeredUsers', registeredUsers);
+  }, [registeredUsers, dbLoading]);
+
+  useEffect(() => { saveStoredData('currentUser', currentUser); }, [currentUser]);
+  useEffect(() => { saveStoredData('camlease_snapshots', snapshots); }, [snapshots]);
+
+  // Luôn đồng bộ dữ liệu nghiệp vụ về localStorage làm local cache / offline fallback
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('cameras', cameras);
+  }, [cameras, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('contracts', contracts);
+  }, [contracts, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('customers', customers);
+  }, [customers, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('expenses', expenses);
+  }, [expenses, dbLoading]);
+
+  // ── Cập nhật selectedDate về ngày hợp đồng gần nhất sau khi contracts load ──
+  useEffect(() => {
+    if (contracts.length === 0) return;
+    const systemTime = new Date(systemDate).getTime();
+    let closestDate = systemDate;
+    let minDiff = Infinity;
+    contracts.forEach((c: RentalContract) => {
       [c.startDate, c.endDate].forEach(dStr => {
         if (!dStr) return;
         const dTime = new Date(dStr).getTime();
         if (isNaN(dTime)) return;
         const diff = Math.abs(dTime - systemTime);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestDate = dStr;
-        }
+        if (diff < minDiff) { minDiff = diff; closestDate = dStr; }
       });
     });
-
-    return closestDate;
-  });
-
-  // Sync data states to local storage and Supabase
-  useEffect(() => {
-    saveStoredData('cameras', cameras);
-    if (isSupabaseConfigured) {
-      syncToSupabase('cameras', cameras);
-    }
-  }, [cameras]);
-
-  useEffect(() => {
-    saveStoredData('contracts', contracts);
-    if (isSupabaseConfigured) {
-      syncToSupabase('contracts', contracts);
-    }
-  }, [contracts]);
-
-  useEffect(() => {
-    saveStoredData('customers', customers);
-    if (isSupabaseConfigured) {
-      syncToSupabase('customers', customers);
-    }
-  }, [customers]);
-
-  useEffect(() => {
-    saveStoredData('expenses', expenses);
-    if (isSupabaseConfigured) {
-      syncToSupabase('expenses', expenses);
-    }
-  }, [expenses]);
-
-  useEffect(() => {
-    saveStoredData('systemDate', systemDate);
-  }, [systemDate]);
-
-  useEffect(() => {
-    saveStoredData('logoText', logoText);
-  }, [logoText]);
-
-  useEffect(() => {
-    saveStoredData('logoSubtitle', logoSubtitle);
-  }, [logoSubtitle]);
-
-  useEffect(() => {
-    saveStoredData('logoIconType', logoIconType);
-  }, [logoIconType]);
-
-  useEffect(() => {
-    saveStoredData('logoIconColor', logoIconColor);
-  }, [logoIconColor]);
-
-  useEffect(() => {
-    saveStoredData('logoBase64', logoBase64);
-  }, [logoBase64]);
-
-  useEffect(() => {
-    saveStoredData('registeredUsers', registeredUsers);
-    if (isSupabaseConfigured) {
-      syncToSupabase('registeredUsers', registeredUsers);
-    }
-  }, [registeredUsers]);
-
-  useEffect(() => {
-    saveStoredData('currentUser', currentUser);
-  }, [currentUser]);
-
-  useEffect(() => {
-    saveStoredData('camlease_snapshots', snapshots);
-    if (isSupabaseConfigured) {
-      syncToSupabase('camlease_snapshots', snapshots);
-    }
-  }, [snapshots]);
-
-  // Load initial data block asynchronously from Supabase if configured or seed if empty
-  useEffect(() => {
-    if (isSupabaseConfigured) {
-      const loadInitialSupabaseData = async () => {
-        try {
-          const cloudCameras = await fetchFromSupabase('cameras');
-          const cloudContracts = await fetchFromSupabase('contracts');
-          const cloudCustomers = await fetchFromSupabase('customers');
-          const cloudExpenses = await fetchFromSupabase('expenses');
-          const cloudUsers = await fetchFromSupabase('registeredUsers');
-          const cloudSnapshots = await fetchFromSupabase('camlease_snapshots');
-
-          if (cloudCameras) setCameras(cloudCameras);
-          if (cloudContracts) setContracts(cloudContracts);
-          if (cloudCustomers) setCustomers(cloudCustomers);
-          if (cloudExpenses) setExpenses(cloudExpenses);
-          if (cloudUsers) setRegisteredUsers(cloudUsers);
-          if (cloudSnapshots) setSnapshots(cloudSnapshots);
-
-          if (cloudCameras || cloudContracts || cloudCustomers || cloudExpenses) {
-            addToast('Đã đồng bộ thành công dữ liệu từ đám mây Supabase!', 'success');
-          } else {
-            console.log('[Supabase] Initializing store seed records on cloud');
-            await syncToSupabase('cameras', cameras);
-            await syncToSupabase('contracts', contracts);
-            await syncToSupabase('customers', customers);
-            await syncToSupabase('expenses', expenses);
-            await syncToSupabase('registeredUsers', registeredUsers);
-            await syncToSupabase('camlease_snapshots', snapshots);
-          }
-        } catch (err) {
-          console.error('[Supabase] Sync boot error, falling back locally', err);
-          addToast('Đồng bộ Supabase thất bại. Đang chạy chế độ Local Offline.', 'warning');
-        }
-      };
-      loadInitialSupabaseData();
-    }
-  }, []);
+    setSelectedDate(closestDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contracts.length > 0 ? contracts[0]?.id : null]);
 
   // Operations: BACKUP & RESTORE
   const handleExportBackup = () => {
@@ -378,7 +501,10 @@ export default function App() {
       if (Array.isArray(parsed.customers)) setCustomers(parsed.customers);
       if (Array.isArray(parsed.expenses)) setExpenses(parsed.expenses);
       if (Array.isArray(parsed.registeredUsers)) setRegisteredUsers(parsed.registeredUsers);
-      if (parsed.systemDate) setSystemDate(parsed.systemDate);
+      if (parsed.systemDate) {
+        setSystemDate(parsed.systemDate);
+        setIsDateSimulated(true);
+      }
       if (parsed.logoText !== undefined) setLogoText(parsed.logoText);
       if (parsed.logoSubtitle !== undefined) setLogoSubtitle(parsed.logoSubtitle);
       if (parsed.logoIconType !== undefined) setLogoIconType(parsed.logoIconType);
@@ -435,7 +561,10 @@ export default function App() {
       if (Array.isArray(data.customers)) setCustomers(data.customers);
       if (Array.isArray(data.expenses)) setExpenses(data.expenses);
       if (Array.isArray(data.registeredUsers)) setRegisteredUsers(data.registeredUsers);
-      if (snap.systemDate) setSystemDate(snap.systemDate);
+      if (snap.systemDate) {
+        setSystemDate(snap.systemDate);
+        setIsDateSimulated(true);
+      }
       if (data.logoText !== undefined) setLogoText(data.logoText);
       if (data.logoSubtitle !== undefined) setLogoSubtitle(data.logoSubtitle);
       if (data.logoIconType !== undefined) setLogoIconType(data.logoIconType);
@@ -456,18 +585,20 @@ export default function App() {
   // Operations: CONTRACTS
   const handleAddContract = (newContract: RentalContract) => {
     setContracts(prev => [newContract, ...prev]);
+    upsertContract(newContract); // sync to Supabase
 
     // Automatically update camera statuses depending on starting date of contract
-    // (If contract starts today, mark cameras as Rented, but actually we maintain dynamically inside lists)
-    setCameras(prevCams =>
-      prevCams.map(cam => {
+    setCameras(prevCams => {
+      const updated = prevCams.map(cam => {
         const isRented = newContract.items.some(item => item.cameraId === cam.id);
         if (isRented && newContract.status === 'Active') {
           return { ...cam, status: 'Rented' as const };
         }
         return cam;
-      })
-    );
+      });
+      upsertCameras(updated); // sync cameras to Supabase
+      return updated;
+    });
 
     // Increment customer count or add new customer if it has been completed
     setCustomers(prevCusts => {
@@ -475,6 +606,7 @@ export default function App() {
         cust => cust.phone === newContract.customerPhone || 
                 cust.name.toLowerCase() === newContract.customerName.toLowerCase()
       );
+      let updated: Customer[];
       if (newContract.status === 'Completed' && !exists) {
         const newCustomer: Customer = {
           id: `cust-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -489,15 +621,19 @@ export default function App() {
             ? `Hồ sơ tự động tạo từ hợp đồng thuê xong ${newContract.contractCode}. Giấy tờ: ${newContract.customerDocNote}`
             : `Hồ sơ tự động tạo từ hợp đồng thuê xong ${newContract.contractCode}.`
         };
-        return [...prevCusts, newCustomer];
+        updated = [...prevCusts, newCustomer];
+        upsertCustomer(newCustomer); // sync to Supabase
+      } else {
+        updated = prevCusts.map(cust => {
+          if (cust.name.toLowerCase() === newContract.customerName.toLowerCase() || cust.phone === newContract.customerPhone) {
+            const updatedCust = { ...cust, rentalCount: cust.rentalCount + 1 };
+            upsertCustomer(updatedCust);
+            return updatedCust;
+          }
+          return cust;
+        });
       }
-
-      return prevCusts.map(cust => {
-        if (cust.name.toLowerCase() === newContract.customerName.toLowerCase() || cust.phone === newContract.customerPhone) {
-          return { ...cust, rentalCount: cust.rentalCount + 1 };
-        }
-        return cust;
-      });
+      return updated;
     });
 
     addToast(
@@ -535,7 +671,6 @@ export default function App() {
                     cust.name.toLowerCase() === c.customerName.toLowerCase()
           );
           if (!exists) {
-            // Count contracts for this customer
             const customerContractsCount = contracts.filter(
               ct => ct.customerPhone === c.customerPhone || 
                     ct.customerName.toLowerCase() === c.customerName.toLowerCase()
@@ -554,6 +689,7 @@ export default function App() {
                 ? `Hồ sơ tự động tạo từ hợp đồng thuê xong ${c.contractCode}. Giấy tờ: ${c.customerDocNote}`
                 : `Hồ sơ tự động tạo từ hợp đồng thuê xong ${c.contractCode}.`
             };
+            upsertCustomer(newCustomer); // sync to Supabase
             return [...prevCusts, newCustomer];
           }
           return prevCusts;
@@ -571,27 +707,33 @@ export default function App() {
             paidAmount: paidAmount !== undefined ? paidAmount : c.paidAmount
           };
 
+          upsertContract(updatedContract); // sync to Supabase
+
           // Adjust camera statuses based on contract transition
           if (status === 'Completed' || status === 'Cancelled') {
-            setCameras(prevCams =>
-              prevCams.map(cam => {
+            setCameras(prevCams => {
+              const updated = prevCams.map(cam => {
                 const wasRented = c.items.some(i => i.cameraId === cam.id);
                 if (wasRented) {
                   return { ...cam, status: 'Available' as const };
                 }
                 return cam;
-              })
-            );
+              });
+              upsertCameras(updated);
+              return updated;
+            });
           } else if (status === 'Active') {
-            setCameras(prevCams =>
-              prevCams.map(cam => {
+            setCameras(prevCams => {
+              const updated = prevCams.map(cam => {
                 const isRented = c.items.some(i => i.cameraId === cam.id);
                 if (isRented) {
                   return { ...cam, status: 'Rented' as const };
                 }
                 return cam;
-              })
-            );
+              });
+              upsertCameras(updated);
+              return updated;
+            });
           }
 
           return updatedContract;
@@ -605,7 +747,9 @@ export default function App() {
     setContracts(prev =>
       prev.map(c => {
         if (c.id === id) {
-          return { ...c, note };
+          const updated = { ...c, note };
+          upsertContract(updated); // sync to Supabase
+          return updated;
         }
         return c;
       })
@@ -616,16 +760,15 @@ export default function App() {
     const contractToDelete = contracts.find(c => c.id === id);
     if (!contractToDelete) return;
 
-    // Remove the contract from the list
     const updatedContracts = contracts.filter(c => c.id !== id);
     setContracts(updatedContracts);
+    deleteContract(id); // sync to Supabase
 
     // Adjust camera statuses based on remaining Active and Overdue contracts
-    setCameras(prevCams =>
-      prevCams.map(cam => {
+    setCameras(prevCams => {
+      const updated = prevCams.map(cam => {
         const wasRented = contractToDelete.items.some(i => i.cameraId === cam.id);
         if (wasRented) {
-          // See if any of the remaining contracts keep this camera rented
           const isStillRented = updatedContracts.some(
             c => (c.status === 'Active' || c.status === 'Overdue') && c.items.some(i => i.cameraId === cam.id)
           );
@@ -634,8 +777,10 @@ export default function App() {
           }
         }
         return cam;
-      })
-    );
+      });
+      upsertCameras(updated);
+      return updated;
+    });
 
     // Decrement customer's rental count
     setCustomers(prevCusts =>
@@ -644,7 +789,9 @@ export default function App() {
           cust.name.toLowerCase() === contractToDelete.customerName.toLowerCase() ||
           cust.phone === contractToDelete.customerPhone
         ) {
-          return { ...cust, rentalCount: Math.max(0, cust.rentalCount - 1) };
+          const updated = { ...cust, rentalCount: Math.max(0, cust.rentalCount - 1) };
+          upsertCustomer(updated);
+          return updated;
         }
         return cust;
       })
@@ -654,36 +801,44 @@ export default function App() {
   // Operations: CAMERAS
   const handleAddCamera = (newCam: Camera) => {
     setCameras(prev => [...prev, newCam]);
+    upsertCamera(newCam); // sync to Supabase
   };
 
   const handleUpdateCamera = (updatedCam: Camera) => {
     setCameras(prev => prev.map(c => (c.id === updatedCam.id ? updatedCam : c)));
+    upsertCamera(updatedCam); // sync to Supabase
   };
 
   const handleDeleteCamera = (id: string) => {
     setCameras(prev => prev.filter(c => c.id !== id));
+    deleteCamera(id); // sync to Supabase
   };
 
   // Operations: CUSTOMERS
   const handleAddCustomer = (newCust: Customer) => {
     setCustomers(prev => [...prev, newCust]);
+    upsertCustomer(newCust); // sync to Supabase
   };
 
   const handleUpdateCustomer = (updatedCust: Customer) => {
     setCustomers(prev => prev.map(c => (c.id === updatedCust.id ? updatedCust : c)));
+    upsertCustomer(updatedCust); // sync to Supabase
   };
 
   const handleDeleteCustomer = (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
+    deleteCustomer(id); // sync to Supabase
   };
 
   // Operations: EXPENSES
   const handleAddExpense = (newExp: Expense) => {
     setExpenses(prev => [newExp, ...prev]);
+    upsertExpense(newExp); // sync to Supabase
   };
 
   const handleDeleteExpense = (id: string) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
+    deleteExpense(id); // sync to Supabase
   };
 
   // Operations: AUTHENTICATION
@@ -942,8 +1097,31 @@ export default function App() {
     setStaffError('Đã xóa tài khoản thành công!');
   };
 
+  // Hiển thị màn hình loading khi đang fetch dữ liệu từ Supabase
+  if (dbLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5 select-none">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+            <Aperture className="w-8 h-8 text-white animate-spin" style={{ animationDuration: '2s' }} />
+          </div>
+        </div>
+        <div className="text-center space-y-1.5">
+          <p className="text-white font-bold text-lg tracking-tight">{logoText || 'CAMLEASE'}</p>
+          <p className="text-slate-400 text-sm">Đang kết nối cơ sở dữ liệu...</p>
+        </div>
+        <div className="flex gap-1.5 mt-2">
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+        </div>
+      </div>
+    );
+  }
+
   // If user is not authenticated, render the glorious login experience screen
   if (!currentUser) {
+
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row antialiased relative overflow-hidden select-none">
         
@@ -992,9 +1170,28 @@ export default function App() {
 
           {/* Welcome Message Text Block */}
           <div className="my-6 md:my-0 space-y-4 md:space-y-6 max-w-xl relative z-10 md:mt-auto md:mb-auto pt-4 md:pt-0">
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-bold text-orange-400 border border-orange-500/30 rounded-full bg-orange-500/10 uppercase tracking-widest leading-none">
-              <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" /> Phiên bản máy chủ đám mây bảo mật
-            </span>
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-bold text-orange-400 border border-orange-500/30 rounded-full bg-orange-500/10 uppercase tracking-widest leading-none">
+                <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" /> Phiên bản máy chủ đám mây bảo mật
+              </span>
+              <span 
+                className={`inline-flex items-center gap-1 px-3 py-1 text-[10px] font-bold border rounded-full uppercase tracking-widest leading-none select-none cursor-help ${
+                  dbStatus.type === 'connected' 
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                    : dbStatus.type === 'error'
+                      ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                      : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                }`}
+                title={dbStatus.message}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  dbStatus.type === 'connected' ? 'bg-emerald-400 animate-pulse' :
+                  dbStatus.type === 'error' ? 'bg-rose-400' : 'bg-amber-400'
+                }`} />
+                {dbStatus.type === 'connected' ? 'Supabase connected' :
+                 dbStatus.type === 'error' ? 'Database error' : 'Offline Mode'}
+              </span>
+            </div>
             <div className="space-y-3 md:space-y-4">
               <h2 className="text-2xl sm:text-3xl lg:text-5xl font-display font-black text-white tracking-tight leading-none animate-fade-in">
                 Quản lý Cho thuê <br className="hidden md:inline" /> 
@@ -1542,6 +1739,48 @@ export default function App() {
               </div>
             </div>
 
+            {/* Đồng hồ thời gian thực + Ngày hệ thống */}
+            <div className="hidden lg:flex items-center gap-3 ml-1">
+              {/* Đồng hồ realtime */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span className="font-mono text-[11px] font-bold text-slate-700 leading-none tabular-nums">
+                  {currentDateTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                </span>
+                <span className="text-slate-300 text-[10px] leading-none">|</span>
+                <span className="font-sans text-[10px] font-semibold text-slate-500 leading-none whitespace-nowrap">
+                  {currentDateTime.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </span>
+              </div>
+
+              {/* Trạng thái kết nối cơ sở dữ liệu Supabase */}
+              <div 
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold select-none cursor-help transition-all duration-200 ${
+                  dbStatus.type === 'connected' 
+                    ? 'bg-emerald-50/80 border-emerald-250 text-emerald-700 shadow-2xs' 
+                    : dbStatus.type === 'error' 
+                      ? 'bg-rose-50/80 border-rose-250 text-rose-700 shadow-2xs' 
+                      : 'bg-amber-50/80 border-amber-250 text-amber-700 shadow-2xs'
+                }`} 
+                title={dbStatus.message}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  dbStatus.type === 'connected' 
+                    ? 'bg-emerald-500 animate-pulse' 
+                    : dbStatus.type === 'error' 
+                      ? 'bg-rose-500' 
+                      : 'bg-amber-500'
+                }`} />
+                <span className="font-sans leading-none tracking-tight">
+                  {dbStatus.type === 'connected' ? 'Đồng bộ Supabase' :
+                   dbStatus.type === 'error' ? 'Lỗi kết nối DB' : 'Offline (Local)'}
+                </span>
+              </div>
+            </div>
+
             {/* Right Side Header Wrap: Navigation & Notification Center */}
             <div className="flex items-center gap-3 md:gap-4 h-full ml-auto md:ml-0">
               {/* Navigation tabs matching reference design - Desktop only */}
@@ -1637,7 +1876,9 @@ export default function App() {
                 cameras={cameras}
                 onUpdateContractStatus={handleUpdateContractStatus}
                 systemDate={systemDate}
-                setSystemDate={setSystemDate}
+                setSystemDate={handleUpdateSystemDate}
+                isDateSimulated={isDateSimulated}
+                onResetSystemDate={handleResetSystemDate}
               />
 
               {/* User Account/Profile dropdown menu */}
@@ -1936,7 +2177,6 @@ export default function App() {
             {activeTab === 'customers' && (
               <CustomerManager
                 customers={customers}
-                contracts={contracts}
                 onAddCustomer={handleAddCustomer}
                 onUpdateCustomer={handleUpdateCustomer}
                 onDeleteCustomer={currentUser?.role === 'admin' ? handleDeleteCustomer : undefined}
