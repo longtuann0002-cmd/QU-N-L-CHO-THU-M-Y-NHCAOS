@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Customer } from '../types';
-import { Search, Plus, Trash2, Edit2, Shield, User, Heart, AlertTriangle, Phone, Globe, MapPin, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { Customer, RentalContract } from '../types';
+import { Search, Plus, Trash2, Edit2, Shield, User, Heart, AlertTriangle, Phone, Globe, MapPin, ChevronLeft, ChevronRight, FileSpreadsheet, Eye, Calendar, DollarSign, FileText, CheckCircle2, Clock, X, Info } from 'lucide-react';
 
 interface CustomerManagerProps {
   customers: Customer[];
+  contracts?: RentalContract[];
   onAddCustomer: (customer: Customer) => void;
   onUpdateCustomer: (customer: Customer) => void;
   onDeleteCustomer?: (id: string) => void;
@@ -11,6 +12,7 @@ interface CustomerManagerProps {
 
 export default function CustomerManager({
   customers,
+  contracts = [],
   onAddCustomer,
   onUpdateCustomer,
   onDeleteCustomer
@@ -20,6 +22,7 @@ export default function CustomerManager({
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [selectedCustomerForHistory, setSelectedCustomerForHistory] = useState<Customer | null>(null);
 
   const [formState, setFormState] = useState({
     name: '',
@@ -205,99 +208,183 @@ export default function CustomerManager({
 
       {/* Grid List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {paginatedCustomers.map(cust => (
-          <div key={cust.id} className="bg-white border border-gray-150/70 rounded-xl p-4 shadow-2xs space-y-3 flex flex-col justify-between hover:shadow-sm transition-all hover:border-gray-300">
-            <div className="space-y-2.5">
-              <div className="flex justify-between items-start gap-1">
-                <div className="min-w-0">
-                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-1.5 truncate" title={cust.name}>
-                    {cust.name}
-                  </h3>
-                  
-                  {/* Trust Level Indicator badge */}
-                  <span className={`inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full mt-1 border ${
-                    cust.trustLevel === 'High' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                    cust.trustLevel === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                    'bg-rose-50 text-rose-700 border-rose-100'
-                  }`}>
-                    <Shield className="w-2.5 h-2.5" />
-                    {cust.trustLevel === 'High' ? 'Cao' : cust.trustLevel === 'Medium' ? 'Trung bình' : 'Nguy cơ'}
-                  </span>
+        {paginatedCustomers.map(cust => {
+          const sortedContracts = (contracts || [])
+            .filter(contract => 
+              contract.customerId === cust.id || 
+              contract.customerPhone === cust.phone ||
+              (cust.name && contract.customerName.toLowerCase().trim() === cust.name.toLowerCase().trim())
+            )
+            .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+          return (
+            <div key={cust.id} className="bg-white border border-gray-150/70 rounded-xl p-4 shadow-2xs space-y-3 flex flex-col justify-between hover:shadow-sm transition-all hover:border-gray-300">
+              <div className="space-y-2.5">
+                <div className="flex justify-between items-start gap-1">
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-gray-900 text-sm flex items-center gap-1.5 truncate" title={cust.name}>
+                      {cust.name}
+                    </h3>
+                    
+                    {/* Trust Level Indicator badge */}
+                    <span className={`inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full mt-1 border ${
+                      cust.trustLevel === 'High' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                      cust.trustLevel === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                      'bg-rose-50 text-rose-700 border-rose-100'
+                    }`}>
+                      <Shield className="w-2.5 h-2.5" />
+                      {cust.trustLevel === 'High' ? 'Cao' : cust.trustLevel === 'Medium' ? 'Trung bình' : 'Nguy cơ'}
+                    </span>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] font-bold text-indigo-750 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg inline-block">
+                      ⏱ {sortedContracts.length || cust.rentalCount} Đơn thuê
+                    </span>
+                  </div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200/50 px-2 py-0.5 rounded-lg inline-block">
-                    ⏱ {cust.rentalCount} Đơn
+                {/* Personal contact parameters list */}
+                <div className="space-y-1.5 text-xs text-gray-655 border-t border-gray-100 pt-2.5">
+                  <div className="flex items-center gap-1.5 font-mono">
+                    <Phone className="w-3 h-3 text-gray-400 shrink-0" />
+                    <span className="text-gray-800 font-bold">{cust.phone}</span>
+                  </div>
+
+                  {cust.email && (
+                    <div className="flex items-center gap-1.5 truncate" title={cust.email}>
+                      <Globe className="w-3 h-3 text-gray-400 shrink-0" />
+                      <a 
+                        href={cust.email.startsWith('http://') || cust.email.startsWith('https://') ? cust.email : `https://${cust.email}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="truncate text-orange-600 hover:text-orange-700 hover:underline font-medium transition-colors"
+                      >
+                        {cust.email}
+                      </a>
+                    </div>
+                  )}
+
+                  {cust.idNumber && (
+                    <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
+                      <span className="font-sans font-bold text-gray-400">CCCD:</span>
+                      <span className="truncate">{cust.idNumber}</span>
+                    </div>
+                  )}
+
+                  {cust.address && (
+                    <div className="flex items-start gap-1.5 text-[11px]">
+                      <MapPin className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
+                      <span className="truncate" title={cust.address}>{cust.address}</span>
+                    </div>
+                  )}
+                </div>
+
+                {cust.notes && (
+                  <div className="bg-amber-50/50 p-2 rounded-lg border border-amber-155/50 text-[11px] text-amber-900 font-mono leading-relaxed max-h-[60px] overflow-y-auto" title={cust.notes}>
+                    ✏️ {cust.notes}
+                  </div>
+                )}
+
+                {/* Lịch sử đơn thuê trực quan theo lần */}
+                <div className="pt-2.5 border-t border-dashed border-gray-150 space-y-2">
+                  <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                    Đơn thuê gần đây ({sortedContracts.length})
                   </span>
+                  {sortedContracts.length === 0 ? (
+                    <p className="text-[11px] text-gray-400 italic">Chưa phát sinh đơn thuê</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[142px] overflow-y-auto pr-0.5 scrollbar-thin">
+                      {[...sortedContracts].reverse().slice(0, 2).map((contract) => {
+                        const origIndex = sortedContracts.findIndex(c => c.id === contract.id);
+                        const nthRental = origIndex !== -1 ? origIndex + 1 : sortedContracts.length;
+                        
+                        const statusConfig = 
+                          contract.status === 'Completed' ? { bg: 'bg-green-50 border-green-150 text-green-700', label: 'Xong' } :
+                          contract.status === 'Active' ? { bg: 'bg-blue-50 border-blue-150 text-blue-700 font-bold', label: 'Đang thuê' } :
+                          contract.status === 'Overdue' ? { bg: 'bg-rose-50 border-rose-150 text-rose-700 animate-pulse', label: 'Trễ hạn' } :
+                          contract.status === 'Pending' ? { bg: 'bg-amber-50 border-amber-150 text-amber-700', label: 'Chờ' } :
+                          { bg: 'bg-gray-50 border-gray-150 text-gray-500', label: 'Hủy' };
+
+                        return (
+                          <div 
+                            key={contract.id} 
+                            onClick={() => setSelectedCustomerForHistory(cust)}
+                            className="bg-gray-50/75 border border-gray-200/60 rounded-lg p-2 hover:border-orange-200 hover:bg-orange-50/10 cursor-pointer transition text-[11px] space-y-1 group"
+                          >
+                            <div className="flex justify-between items-center gap-1">
+                              <span className="font-mono font-extrabold text-orange-600 truncate group-hover:text-orange-700">
+                                {contract.contractCode}
+                              </span>
+                              <span className={`px-1 rounded text-[8.5px] font-bold border ${statusConfig.bg}`}>
+                                {statusConfig.label}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-gray-750 font-sans">
+                                Lần thuê {nthRental}
+                              </span>
+                              <span className="font-mono text-gray-500 text-[10px]">
+                                {contract.totalPrice.toLocaleString()}đ
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-400 font-mono flex justify-between items-center">
+                              <span>{new Date(contract.startDate).toLocaleDateString('vi-VN')}</span>
+                              <span className="text-[9px] text-indigo-500 bg-indigo-50 px-1 py-0.2 rounded font-sans font-medium">
+                                {contract.items.length} thiết bị
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {sortedContracts.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCustomerForHistory(cust)}
+                          className="text-[10px] font-bold text-indigo-650 hover:text-indigo-800 transition block text-center w-full pt-1"
+                        >
+                          Xem thêm {sortedContracts.length - 2} đơn khác...
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Personal contact parameters list */}
-              <div className="space-y-1.5 text-xs text-gray-655 border-t border-gray-100 pt-2.5">
-                <div className="flex items-center gap-1.5 font-mono">
-                  <Phone className="w-3 h-3 text-gray-400 shrink-0" />
-                  <span className="text-gray-800 font-bold">{cust.phone}</span>
-                </div>
-
-                {cust.email && (
-                  <div className="flex items-center gap-1.5 truncate" title={cust.email}>
-                    <Globe className="w-3 h-3 text-gray-400 shrink-0" />
-                    <a 
-                      href={cust.email.startsWith('http://') || cust.email.startsWith('https://') ? cust.email : `https://${cust.email}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="truncate text-orange-600 hover:text-orange-700 hover:underline font-medium transition-colors"
-                    >
-                      {cust.email}
-                    </a>
-                  </div>
-                )}
-
-                {cust.idNumber && (
-                  <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
-                    <span className="font-sans font-bold text-gray-400">CCCD:</span>
-                    <span className="truncate">{cust.idNumber}</span>
-                  </div>
-                )}
-
-                {cust.address && (
-                  <div className="flex items-start gap-1.5 text-[11px]">
-                    <MapPin className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
-                    <span className="truncate" title={cust.address}>{cust.address}</span>
-                  </div>
-                )}
-              </div>
-
-              {cust.notes && (
-                <div className="bg-amber-50/50 p-2 rounded-lg border border-amber-150/50 text-[11px] text-amber-900 font-mono leading-relaxed max-h-[60px] overflow-y-auto" title={cust.notes}>
-                  ✏️ {cust.notes}
-                </div>
-              )}
-            </div>
-
-            {/* Actions panel */}
-            <div className="border-t border-gray-100 pt-2.5 flex items-center justify-between gap-1 text-[11px]">
-              <button
-                onClick={() => handleOpenEditModal(cust)}
-                className="text-orange-600 hover:text-white border border-orange-200 hover:bg-orange-600 px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer text-center shrink-0"
-              >
-                Sửa hồ sơ
-              </button>
-
-              {onDeleteCustomer && (
+              {/* Actions panel */}
+              <div className="border-t border-gray-100 pt-2.5 flex items-center justify-between gap-1.5 text-[11px]">
                 <button
-                  onClick={() => {
-                    setDeleteConfirmId(cust.id);
-                  }}
-                  className="text-gray-400 hover:text-rose-650 p-1.5 hover:bg-rose-50 rounded-md transition-colors cursor-pointer shrink-0"
-                  title="Xóa khách hàng"
+                  type="button"
+                  onClick={() => setSelectedCustomerForHistory(cust)}
+                  className="bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-150 px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center justify-center gap-1 flex-1 text-center"
+                  title="Xem toàn bộ lịch sử đơn hàng và lần thuê"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Eye className="w-3.5 h-3.5 shrink-0" />
+                  <span>Chi tiết ({sortedContracts.length} đơn)</span>
                 </button>
-              )}
+
+                <button
+                  onClick={() => handleOpenEditModal(cust)}
+                  className="text-orange-600 hover:text-white border border-orange-200 hover:bg-orange-600 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer text-center shrink-0"
+                >
+                  Sửa
+                </button>
+
+                {onDeleteCustomer && (
+                  <button
+                    onClick={() => {
+                      setDeleteConfirmId(cust.id);
+                    }}
+                    className="text-gray-400 hover:text-rose-650 p-2 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0 border border-transparent hover:border-rose-100"
+                    title="Xóa khách hàng"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {filteredCustomers.length === 0 && (
           <div className="col-span-full bg-white border border-gray-150 p-12 text-center rounded-2xl text-gray-400 italic font-medium">
             Không tìm thấy hồ sơ khách hàng nào phù hợp với từ khóa này.
@@ -515,6 +602,244 @@ export default function CustomerManager({
           </div>
         </div>
       )}
+
+      {/* Customer detailed order history modal */}
+      {selectedCustomerForHistory && (() => {
+        const sortedContracts = (contracts || [])
+          .filter(contract => 
+            contract.customerId === selectedCustomerForHistory.id || 
+            contract.customerPhone === selectedCustomerForHistory.phone ||
+            (selectedCustomerForHistory.name && contract.customerName.toLowerCase().trim() === selectedCustomerForHistory.name.toLowerCase().trim())
+          )
+          .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+        // Reverse to show newest orders first
+        const displayContracts = [...sortedContracts].reverse();
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in">
+            <div className="bg-slate-50 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] overflow-hidden flex flex-col border border-gray-150 animate-scale-up">
+              {/* Modal Header */}
+              <div className="bg-indigo-600 text-white px-5 py-4 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-3">
+                  <span className="p-1.5 bg-indigo-500/30 rounded-lg">
+                    <FileText className="w-5 h-5 text-white" />
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg">Hồ Sơ & Lịch Sử Đơn Thuê Máy khéo kín</h3>
+                    <p className="text-xs text-indigo-100">
+                      Khách hàng: <span className="font-extrabold text-white text-sm">{selectedCustomerForHistory.name}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomerForHistory(null)}
+                  className="text-white hover:text-gray-200 font-extrabold text-2xl p-1 hover:bg-indigo-700/50 rounded-lg transition"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 select-none">
+                {/* Profile detail section */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-extrabold text-slate-404 uppercase tracking-widest text-slate-400">Thông tin khách hàng</h4>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex items-center gap-2 text-gray-700">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        <span className="font-mono font-bold">{selectedCustomerForHistory.phone}</span>
+                      </div>
+                      {selectedCustomerForHistory.idNumber && (
+                        <div className="flex items-center gap-2 text-gray-750 font-mono">
+                          <span className="font-sans text-xs font-bold text-gray-400">CMND/CCCD:</span>
+                          <span>{selectedCustomerForHistory.idNumber}</span>
+                        </div>
+                      )}
+                      {selectedCustomerForHistory.email && (
+                        <div className="flex items-center gap-2 text-gray-700 truncate">
+                          <Globe className="w-4 h-4 text-gray-400" />
+                          <a href={selectedCustomerForHistory.email.startsWith('http') ? selectedCustomerForHistory.email : `https://${selectedCustomerForHistory.email}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline truncate">
+                            {selectedCustomerForHistory.email}
+                          </a>
+                        </div>
+                      )}
+                      {selectedCustomerForHistory.address && (
+                        <div className="text-xs text-gray-500 flex items-start gap-1.5 leading-tight">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                          <span>{selectedCustomerForHistory.address}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 border-t md:border-t-0 md:border-l border-gray-100 pt-3 md:pt-0 md:pl-4 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-404 uppercase tracking-widest text-slate-400">Xếp hạng & Thống kê</h4>
+                      <div className="flex items-center gap-2.5 mt-1.5">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-0.5 rounded-full border ${
+                          selectedCustomerForHistory.trustLevel === 'High' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                          selectedCustomerForHistory.trustLevel === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                          'bg-rose-50 text-rose-700 border-rose-100'
+                        }`}>
+                          <Shield className="w-3 h-3" />
+                          Mức tín nhiệm: {selectedCustomerForHistory.trustLevel === 'High' ? 'Cao' : selectedCustomerForHistory.trustLevel === 'Medium' ? 'Trung bình' : 'Nguy cơ'}
+                        </span>
+                        <span className="text-xs font-bold text-indigo-750 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full">
+                          Tổng cộng {sortedContracts.length} đơn hàng
+                        </span>
+                      </div>
+                    </div>
+                    {selectedCustomerForHistory.notes && (
+                      <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-100 text-xs text-amber-900 font-mono mt-2 italic leading-normal">
+                        📝 Lưu ý: {selectedCustomerForHistory.notes}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Orders section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-1.5 tracking-wider uppercase">
+                      Danh sách đơn thuê máy (Thời gian lùi dần)
+                    </h3>
+                  </div>
+
+                  {displayContracts.length === 0 ? (
+                    <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400 italic">
+                      Chưa phát sinh bất kỳ đơn thuê nào trên hệ thống.
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                      {displayContracts.map((contract) => {
+                        const origIndex = sortedContracts.findIndex(c => c.id === contract.id);
+                        const sequenceNum = origIndex !== -1 ? origIndex + 1 : sortedContracts.length;
+                        
+                        const diffTime = Math.abs(new Date(contract.endDate).getTime() - new Date(contract.startDate).getTime());
+                        const calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+
+                        const statusStyles = 
+                          contract.status === 'Completed' ? { bg: 'bg-green-500/10 text-green-700 border-green-200', label: 'Hoàn thành' } :
+                          contract.status === 'Active' ? { bg: 'bg-blue-500/10 text-blue-700 border-blue-200 font-bold', label: 'Đang thuê' } :
+                          contract.status === 'Overdue' ? { bg: 'bg-rose-500/10 text-rose-700 border-rose-200 animate-pulse', label: 'Quá hạn trả' } :
+                          contract.status === 'Pending' ? { bg: 'bg-amber-500/10 text-amber-700 border-amber-200', label: 'Chờ nhận máy' } :
+                          { bg: 'bg-gray-500/10 text-gray-500 border-gray-200', label: 'Đã hủy đơn' };
+
+                        return (
+                          <div 
+                            key={contract.id} 
+                            className="bg-white border border-gray-200 rounded-xl p-4 shadow-2xs hover:border-indigo-300 hover:shadow-xs transition-all space-y-3"
+                          >
+                            {/* Contract Card Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="bg-indigo-600 text-white font-extrabold text-xs px-2.5 py-1 rounded-lg">
+                                  Hợp đồng {contract.contractCode}
+                                </span>
+                                <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[11px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+                                  ⭐ Lần thuê thứ {sequenceNum}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${statusStyles.bg}`}>
+                                  ● {statusStyles.label}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Contract Time Parameter */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-2.5 rounded-lg border border-gray-150">
+                              <div className="space-y-1">
+                                <div className="text-gray-400 font-bold">Thời hạn thuê máy:</div>
+                                <div className="text-gray-800 font-medium flex items-center gap-1">
+                                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                                  <span>{new Date(contract.startDate).toLocaleDateString('vi-VN')}</span>
+                                  <span className="text-gray-400 font-light">đến</span>
+                                  <span>{new Date(contract.endDate).toLocaleDateString('vi-VN')}</span>
+                                </div>
+                              </div>
+                              <div className="space-y-1 text-left sm:text-right">
+                                <div className="text-gray-400 font-bold">Hình thức thuê:</div>
+                                <div className="text-gray-800 font-extrabold text-sm text-indigo-750">
+                                  {contract.is6Hours 
+                                    ? `Gói ngắn hạn 6 giờ (Trả trước ${contract.returnTime || '18:00'})` 
+                                    : `${calculatedDays} ngày (${calculatedDays} đêm)`
+                                  }
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Contract items */}
+                            <div className="space-y-1.5">
+                              <div className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">Thiết bị trong đơn hàng:</div>
+                              <div className="border border-gray-150 rounded-lg overflow-hidden divide-y divide-gray-150">
+                                {contract.items.map((item, id) => (
+                                  <div key={id} className="flex justify-between items-center p-2 text-xs hover:bg-slate-50/50">
+                                    <div className="font-extrabold text-gray-800 flex items-center gap-1.5 font-sans">
+                                      <span className="text-orange-500">📷</span>
+                                      <span>{item.cameraName}</span>
+                                    </div>
+                                    <div className="text-right font-mono text-gray-600 font-medium">
+                                      ({item.quantity} chiếc) • {Math.round(item.dailyRate).toLocaleString()}đ {contract.is6Hours ? '/gói 6h' : '/ngày'}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Financial values and deposit details */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                              <div className="bg-slate-50 border border-gray-200 p-2 rounded-xl">
+                                <div className="text-[10px] text-gray-400 font-extrabold uppercase">Giá trị đơn hàng</div>
+                                <div className="font-mono text-xs sm:text-sm text-gray-800 font-extrabold">
+                                  {contract.totalPrice.toLocaleString()}đ
+                                </div>
+                              </div>
+                              <div className="bg-emerald-50/40 border border-emerald-100 p-2 rounded-xl">
+                                <div className="text-[10px] text-emerald-600 font-extrabold uppercase">Đã thanh toán</div>
+                                <div className="font-mono text-xs sm:text-sm text-emerald-700 font-extrabold">
+                                  {contract.paidAmount.toLocaleString()}đ
+                                </div>
+                              </div>
+                              <div className="bg-indigo-50/40 border border-indigo-100 p-2 rounded-xl col-span-2 sm:col-span-1">
+                                <div className="text-[10px] text-indigo-605 font-extrabold uppercase text-indigo-700">Bảo đảm thế chấp</div>
+                                <div className="font-mono text-[11px] text-indigo-700 font-bold truncate" title={contract.customerDocNote || `${contract.customerDocType}: ${contract.depositAmount.toLocaleString()}đ`}>
+                                  {contract.customerDocNote || `${contract.customerDocType} (Trị giá ${contract.depositAmount.toLocaleString()}đ)`}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Optional notes */}
+                            {contract.note && (
+                              <div className="bg-amber-50 border border-amber-100 text-[11px] p-2 rounded-lg text-amber-900 font-mono italic">
+                                📌 Chú thích nghiệp vụ: {contract.note}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-white border-t border-gray-150 p-4 flex justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomerForHistory(null)}
+                  className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold px-6 py-2 rounded-xl text-sm shadow-sm transition cursor-pointer"
+                >
+                  Đóng hồ sơ
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

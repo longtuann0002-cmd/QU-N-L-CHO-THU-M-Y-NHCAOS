@@ -70,3 +70,19 @@ export interface BankConfig {
   accountName: string;
 }
 
+export interface ContractTemplate {
+  id: string;
+  templateName: string;
+  customerName: string;
+  customerPhone: string;
+  customerDocType: 'CCCD' | 'GPLX' | 'Passport' | 'CashDeposit' | 'Other';
+  customerDocNote: string;
+  selectedCameraIds: string[];
+  is6Hours: boolean;
+  returnTime: string;
+  depositAmount: number;
+  paidAmountPct: number;
+  paidAmount: number;
+  note: string;
+}
+
