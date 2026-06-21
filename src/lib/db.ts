@@ -76,11 +76,15 @@ export async function fetchCameras(): Promise<Camera[]> {
     console.error('[db] fetchCameras error:', error.message);
     return localLoad('cameras', INITIAL_CAMERAS);
   }
-  // Nếu bảng trống, seed dữ liệu từ localStorage
-  if (!data || data.length === 0) {
+  const isSeeded = await loadSetting('seeded_cameras', false);
+  if (!isSeeded && (!data || data.length === 0)) {
     const localVal = localLoad('cameras', INITIAL_CAMERAS);
     await seedCameras(localVal);
+    await saveSetting('seeded_cameras', true);
     return localVal;
+  }
+  if (!isSeeded && data && data.length > 0) {
+    await saveSetting('seeded_cameras', true);
   }
   return data.map(rowToCamera);
 }
@@ -151,10 +155,15 @@ export async function fetchCustomers(): Promise<Customer[]> {
     console.error('[db] fetchCustomers error:', error.message);
     return localLoad('customers', INITIAL_CUSTOMERS);
   }
-  if (!data || data.length === 0) {
+  const isSeeded = await loadSetting('seeded_customers', false);
+  if (!isSeeded && (!data || data.length === 0)) {
     const localVal = localLoad('customers', INITIAL_CUSTOMERS);
     await seedCustomers(localVal);
+    await saveSetting('seeded_customers', true);
     return localVal;
+  }
+  if (!isSeeded && data && data.length > 0) {
+    await saveSetting('seeded_customers', true);
   }
   return data.map(rowToCustomer);
 }
@@ -242,10 +251,15 @@ export async function fetchContracts(): Promise<RentalContract[]> {
     console.error('[db] fetchContracts error:', error.message);
     return localLoad('contracts', INITIAL_CONTRACTS);
   }
-  if (!data || data.length === 0) {
+  const isSeeded = await loadSetting('seeded_contracts', false);
+  if (!isSeeded && (!data || data.length === 0)) {
     const localVal = localLoad('contracts', INITIAL_CONTRACTS);
     await seedContracts(localVal);
+    await saveSetting('seeded_contracts', true);
     return localVal;
+  }
+  if (!isSeeded && data && data.length > 0) {
+    await saveSetting('seeded_contracts', true);
   }
   return data.map(rowToContract);
 }
@@ -309,10 +323,15 @@ export async function fetchExpenses(): Promise<Expense[]> {
     console.error('[db] fetchExpenses error:', error.message);
     return localLoad('expenses', INITIAL_EXPENSES);
   }
-  if (!data || data.length === 0) {
+  const isSeeded = await loadSetting('seeded_expenses', false);
+  if (!isSeeded && (!data || data.length === 0)) {
     const localVal = localLoad('expenses', INITIAL_EXPENSES);
     await seedExpenses(localVal);
+    await saveSetting('seeded_expenses', true);
     return localVal;
+  }
+  if (!isSeeded && data && data.length > 0) {
+    await saveSetting('seeded_expenses', true);
   }
   return data.map(rowToExpense);
 }
