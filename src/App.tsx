@@ -8,7 +8,16 @@ import {
   INITIAL_CONTRACTS,
   INITIAL_EXPENSES
 } from './utils/mockData';
-import { isSupabaseConfigured, syncToSupabase, fetchFromSupabase } from './utils/supabase.ts';
+import { 
+  isSupabaseConfigured, 
+  syncToSupabase, 
+  fetchFromSupabase,
+  supabaseUrl,
+  supabaseAnonKey,
+  updateSupabaseConfig,
+  testSupabaseConnection,
+  checkIsConfigured
+} from './utils/supabase.ts';
 
 
 // Component imports
@@ -57,7 +66,10 @@ import {
   Trash2,
   Save,
   FileDown,
-  FileUp
+  FileUp,
+  AlertTriangle,
+  Info,
+  Globe
 } from 'lucide-react';
 
 const DEFAULT_USERS = [
@@ -119,6 +131,15 @@ export default function App() {
   const [newSnapshotName, setNewSnapshotName] = useState('');
   const [importError, setImportError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Supabase Custom Sync States
+  const [sbUrl, setSbUrl] = useState(supabaseUrl);
+  const [sbKey, setSbKey] = useState(supabaseAnonKey);
+  const [sbConfigured, setSbConfigured] = useState(isSupabaseConfigured);
+  const [sbTesting, setSbTesting] = useState(false);
+  const [sbTestResult, setSbTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [sbSyncing, setSbSyncing] = useState(false);
+  const [showSqlGuide, setShowSqlGuide] = useState(false);
 
   // Forgot Password States
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
@@ -221,31 +242,31 @@ export default function App() {
   // Sync data states to local storage and Supabase
   useEffect(() => {
     saveStoredData('cameras', cameras);
-    if (isSupabaseConfigured) {
+    if (sbConfigured) {
       syncToSupabase('cameras', cameras);
     }
-  }, [cameras]);
+  }, [cameras, sbConfigured]);
 
   useEffect(() => {
     saveStoredData('contracts', contracts);
-    if (isSupabaseConfigured) {
+    if (sbConfigured) {
       syncToSupabase('contracts', contracts);
     }
-  }, [contracts]);
+  }, [contracts, sbConfigured]);
 
   useEffect(() => {
     saveStoredData('customers', customers);
-    if (isSupabaseConfigured) {
+    if (sbConfigured) {
       syncToSupabase('customers', customers);
     }
-  }, [customers]);
+  }, [customers, sbConfigured]);
 
   useEffect(() => {
     saveStoredData('expenses', expenses);
-    if (isSupabaseConfigured) {
+    if (sbConfigured) {
       syncToSupabase('expenses', expenses);
     }
-  }, [expenses]);
+  }, [expenses, sbConfigured]);
 
   useEffect(() => {
     saveStoredData('systemDate', systemDate);
@@ -273,10 +294,10 @@ export default function App() {
 
   useEffect(() => {
     saveStoredData('registeredUsers', registeredUsers);
-    if (isSupabaseConfigured) {
+    if (sbConfigured) {
       syncToSupabase('registeredUsers', registeredUsers);
     }
-  }, [registeredUsers]);
+  }, [registeredUsers, sbConfigured]);
 
   useEffect(() => {
     saveStoredData('currentUser', currentUser);
@@ -284,14 +305,14 @@ export default function App() {
 
   useEffect(() => {
     saveStoredData('camlease_snapshots', snapshots);
-    if (isSupabaseConfigured) {
+    if (sbConfigured) {
       syncToSupabase('camlease_snapshots', snapshots);
     }
-  }, [snapshots]);
+  }, [snapshots, sbConfigured]);
 
   // Load initial data block asynchronously from Supabase if configured or seed if empty
   useEffect(() => {
-    if (isSupabaseConfigured) {
+    if (sbConfigured) {
       const loadInitialSupabaseData = async () => {
         try {
           const cloudCameras = await fetchFromSupabase('cameras');
@@ -326,7 +347,75 @@ export default function App() {
       };
       loadInitialSupabaseData();
     }
-  }, []);
+  }, [sbConfigured]);
+
+  // Manual upload (Push) to Supabase
+  const handlePushToSupabase = async () => {
+    if (!sbConfigured) {
+      addToast('Chưa cấu hình Supabase Cloud!', 'warning');
+      return;
+    }
+    setSbSyncing(true);
+    try {
+      const p1 = syncToSupabase('cameras', cameras);
+      const p2 = syncToSupabase('contracts', contracts);
+      const p3 = syncToSupabase('customers', customers);
+      const p4 = syncToSupabase('expenses', expenses);
+      const p5 = syncToSupabase('registeredUsers', registeredUsers);
+      const p6 = syncToSupabase('camlease_snapshots', snapshots);
+      
+      const results = await Promise.all([p1, p2, p3, p4, p5, p6]);
+      if (results.every(r => r)) {
+        addToast('Đã đồng bộ tải toàn bộ dữ liệu lên Supabase Cloud thành công!', 'success');
+      } else {
+        addToast('Đồng bộ một số bảng bị thất bại. Vui lòng kiểm tra lại bảng trong Supabase.', 'warning');
+      }
+    } catch (err) {
+      console.error(err);
+      addToast('Đồng bộ thất bại do lỗi kết nối đám mây.', 'error');
+    } finally {
+      setSbSyncing(false);
+    }
+  };
+
+  // Manual download (Pull) from Supabase
+  const handlePullFromSupabase = async () => {
+    if (!sbConfigured) {
+      addToast('Chưa cấu hình Supabase Cloud!', 'warning');
+      return;
+    }
+    if (!confirm('CẢNH BÁO: Hành động này sẽ tải dữ liệu từ đám mây xuống và GHI ĐÈ TOÀN BỘ dữ liệu hiện tại trên thiết bị này. Bạn có chắc chắn muốn tiếp tục?')) {
+      return;
+    }
+    setSbSyncing(true);
+    try {
+      const cloudCameras = await fetchFromSupabase('cameras');
+      const cloudContracts = await fetchFromSupabase('contracts');
+      const cloudCustomers = await fetchFromSupabase('customers');
+      const cloudExpenses = await fetchFromSupabase('expenses');
+      const cloudUsers = await fetchFromSupabase('registeredUsers');
+      const cloudSnapshots = await fetchFromSupabase('camlease_snapshots');
+      
+      let gotData = false;
+      if (cloudCameras) { setCameras(cloudCameras); gotData = true; }
+      if (cloudContracts) { setContracts(cloudContracts); gotData = true; }
+      if (cloudCustomers) { setCustomers(cloudCustomers); gotData = true; }
+      if (cloudExpenses) { setExpenses(cloudExpenses); gotData = true; }
+      if (cloudUsers) { setRegisteredUsers(cloudUsers); gotData = true; }
+      if (cloudSnapshots) { setSnapshots(cloudSnapshots); gotData = true; }
+      
+      if (gotData) {
+        addToast('Đã tải và khôi phục thành công dữ liệu từ Supabase Cloud xuống thiết bị!', 'success');
+      } else {
+        addToast('Không tìm thấy bản ghi dữ liệu nào trên Supabase để tải xuống.', 'warning');
+      }
+    } catch (err) {
+      console.error(err);
+      addToast('Không thể tải dữ liệu xuống do lỗi kết nối.', 'error');
+    } finally {
+      setSbSyncing(false);
+    }
+  };
 
   // Operations: BACKUP & RESTORE
   const handleExportBackup = () => {
@@ -2933,6 +3022,232 @@ export default function App() {
                         </div>
                       </div>
                     ))
+                  )}
+                </div>
+              </div>
+
+              {/* 3. ĐỒNG BỘ ĐÁM MÂY (SUPABASE CLOUD SYNC) */}
+              <div className="space-y-3 pt-4 border-t border-gray-100">
+                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest pb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Đồng bộ Đám mây (Supabase Cloud Sync)</span>
+                  </span>
+                  
+                  {/* Status Indicator Badge */}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                    sbConfigured 
+                      ? 'bg-green-50 text-green-700 border border-green-200' 
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    {sbConfigured ? 'Đang hoạt động' : 'Chưa cấu hình'}
+                  </span>
+                </h4>
+                
+                <p className="text-xs text-gray-500">
+                  Lưu trữ dữ liệu tự động lên cơ sở dữ liệu đám mây Supabase. Giúp đồng bộ hóa dữ liệu trực tuyến giữa nhiều thiết bị và tránh mất mát khi xóa dữ liệu trình duyệt.
+                </p>
+
+                {/* Form configuration */}
+                <div className="bg-gray-50/50 border border-gray-150 rounded-xl p-4 space-y-3.5">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-700">Supabase URL</label>
+                    <input
+                      type="text"
+                      value={sbUrl}
+                      onChange={(e) => {
+                        setSbUrl(e.target.value);
+                        setSbTestResult(null);
+                      }}
+                      placeholder="https://your-project-id.supabase.co"
+                      className="w-full px-3 py-2 text-xs border border-gray-250 rounded-lg focus:outline-hidden focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-semibold text-gray-800 bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-700">Supabase Anon Key (API Key)</label>
+                    <input
+                      type="password"
+                      value={sbKey}
+                      onChange={(e) => {
+                        setSbKey(e.target.value);
+                        setSbTestResult(null);
+                      }}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full px-3 py-2 text-xs border border-gray-250 rounded-lg focus:outline-hidden focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-mono text-gray-800 bg-white"
+                    />
+                  </div>
+
+                  {sbTestResult && (
+                    <div className={`p-3 rounded-lg text-xs font-medium border ${
+                      sbTestResult.success 
+                        ? 'bg-green-50 border-green-100 text-green-700' 
+                        : 'bg-red-50 border-red-100 text-red-700'
+                    }`}>
+                      {sbTestResult.success ? '✅' : '❌'} {sbTestResult.message}
+                    </div>
+                  )}
+
+                  {/* Actions for credentials */}
+                  <div className="flex gap-2 select-none pt-1">
+                    <button
+                      type="button"
+                      disabled={sbTesting}
+                      onClick={async () => {
+                        if (!sbUrl || !sbKey) {
+                          setSbTestResult({ success: false, message: 'Vui lòng nhập đầy đủ Supabase URL và Anon Key.' });
+                          return;
+                        }
+                        setSbTesting(true);
+                        setSbTestResult(null);
+                        const res = await testSupabaseConnection(sbUrl, sbKey);
+                        setSbTestResult(res);
+                        setSbTesting(false);
+                      }}
+                      className="px-3.5 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-250 hover:border-gray-300 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3 h-3 text-gray-500 ${sbTesting ? 'animate-spin' : ''}`} />
+                      <span>Kiểm tra kết nối</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={sbTesting}
+                      onClick={() => {
+                        if (!sbUrl || !sbKey) {
+                          addToast('Vui lòng điền đủ thông tin kết nối', 'warning');
+                          return;
+                        }
+                        const success = updateSupabaseConfig(sbUrl, sbKey);
+                        if (success) {
+                          setSbConfigured(true);
+                          addToast('Lưu cấu hình và kết nối Supabase thành công!', 'success');
+                          setSbTestResult({ success: true, message: 'Kết nối đang hoạt động ổn định!' });
+                        } else {
+                          addToast('Cấu hình không hợp lệ.', 'error');
+                        }
+                      }}
+                      className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-850 text-white font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 ml-auto"
+                    >
+                      <Save className="w-3 h-3" />
+                      <span>Lưu cấu hình</span>
+                    </button>
+
+                    {sbConfigured && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm('Bạn có chắc chắn muốn ngắt kết nối đám mây? Dữ liệu sẽ chỉ lưu cục bộ trên máy này.')) {
+                            updateSupabaseConfig('', '');
+                            setSbUrl('');
+                            setSbKey('');
+                            setSbConfigured(false);
+                            setSbTestResult(null);
+                            addToast('Đã ngắt kết nối với Supabase Cloud. Chuyển sang chế độ Local offline.', 'info');
+                          }
+                        }}
+                        className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <X className="w-3 h-3 text-red-600" />
+                        <span>Ngắt kết nối</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Operations & Sync trigger */}
+                {sbConfigured && (
+                  <div className="pt-2">
+                    <h5 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Đồng bộ dữ liệu thủ công</h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      
+                      <button
+                        type="button"
+                        disabled={sbSyncing}
+                        onClick={handlePushToSupabase}
+                        className="flex items-center justify-center gap-2 p-3 border border-blue-100 bg-blue-50/20 hover:bg-blue-50/50 rounded-xl transition cursor-pointer text-blue-950 text-xs font-bold disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4 text-blue-600 rotate-180 shrink-0 animate-pulse" />
+                        <div className="text-left">
+                          <span className="block font-bold">Đẩy lên Đám mây (Push)</span>
+                          <span className="block text-[9px] font-normal text-blue-500 mt-0.5">Đè dữ liệu máy này lên cloud</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={sbSyncing}
+                        onClick={handlePullFromSupabase}
+                        className="flex items-center justify-center gap-2 p-3 border border-indigo-100 bg-indigo-50/20 hover:bg-indigo-50/50 rounded-xl transition cursor-pointer text-indigo-950 text-xs font-bold disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4 text-indigo-600 shrink-0 animate-pulse" />
+                        <div className="text-left">
+                          <span className="block font-bold">Tải từ Đám mây (Pull)</span>
+                          <span className="block text-[9px] font-normal text-indigo-500 mt-0.5">Đè dữ liệu cloud vào máy này</span>
+                        </div>
+                      </button>
+
+                    </div>
+                  </div>
+                )}
+
+                {/* SQL setup instructions */}
+                <div className="pt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowSqlGuide(!showSqlGuide)}
+                    className="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1 transition-colors cursor-pointer select-none"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                    <span>{showSqlGuide ? 'Ẩn hướng dẫn SQL' : 'Xem hướng dẫn tạo bảng SQL trong Supabase'}</span>
+                  </button>
+
+                  {showSqlGuide && (
+                    <div className="mt-2.5 p-3.5 bg-slate-900 text-slate-100 rounded-xl font-mono text-[10px] leading-relaxed border border-slate-800 space-y-2 select-text relative shadow-inner">
+                      <div className="flex justify-between items-center text-[9px] text-slate-400 border-b border-slate-800 pb-1.5 font-sans">
+                        <span>LỆNH SQL TẠO BẢNG</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`create table if not exists public.camlease_store (
+  key text primary key,
+  value text not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Bật Row Level Security (RLS)
+alter table public.camlease_store enable row level security;
+
+-- Cho phép quyền truy cập Anonymous đọc/ghi
+create policy "Allow public read access" on public.camlease_store for select using (true);
+create policy "Allow public write access" on public.camlease_store for insert with check (true);
+create policy "Allow public update access" on public.camlease_store for update using (true);
+create policy "Allow public delete access" on public.camlease_store for delete using (true);`);
+                            addToast('Đã sao chép lệnh SQL vào Clipboard!', 'success');
+                          }}
+                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded cursor-pointer transition"
+                        >
+                          Sao chép SQL
+                        </button>
+                      </div>
+                      <pre className="overflow-x-auto whitespace-pre scrollbar-thin max-h-[160px]">{`create table if not exists public.camlease_store (
+  key text primary key,
+  value text not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Bật Row Level Security (RLS)
+alter table public.camlease_store enable row level security;
+
+-- Cho phép quyền truy cập Anonymous đọc/ghi
+create policy "Allow public read access" on public.camlease_store for select using (true);
+create policy "Allow public write access" on public.camlease_store for insert with check (true);
+create policy "Allow public update access" on public.camlease_store for update using (true);
+create policy "Allow public delete access" on public.camlease_store for delete using (true);`}</pre>
+                      <div className="text-[9px] text-orange-400 font-sans mt-2 pt-1 border-t border-slate-800/60 leading-normal">
+                        ⚠️ <strong>Lưu ý:</strong> Sao chép toàn bộ lệnh trên và dán vào tab <strong>SQL Editor</strong> trên trang quản lý Supabase của bạn, sau đó nhấn <strong>Run</strong> để tạo bảng và mở quyền đọc/ghi.
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
