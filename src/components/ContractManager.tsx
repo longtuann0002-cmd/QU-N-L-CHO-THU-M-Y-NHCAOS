@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { RentalContract, Camera, ContractStatus, BankConfig } from '../types';
+import { RentalContract, Camera, ContractStatus, BankConfig, ContractTemplate } from '../types';
 import { Search, Plus, Filter, Calendar, FileText, Check, AlertCircle, RefreshCw, X, ShieldAlert, Phone, Briefcase, Trash2, QrCode, Settings, Download, Image as ImageIcon, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
 import { getCameraRateForDuration, checkBookingConflict } from '../utils/pricing';
 import { loadStoredData, saveStoredData } from '../utils/mockData';
@@ -190,6 +190,136 @@ export default function ContractManager({
     paidAmount: 0,
     note: ''
   });
+
+  // Predefined Contract/Rental Form templates (Mẫu đơn thuê sẵn có)
+  const DEFAULT_TEMPLATES: ContractTemplate[] = useMemo(() => [
+    {
+      id: 'tpl-1',
+      templateName: '📸 Canon Vlog Sinh Viên (6 tiếng)',
+      customerName: 'Nguyễn Khánh Vy',
+      customerPhone: '0965312389',
+      customerDocType: 'CCCD',
+      customerDocNote: 'Thẻ sinh viên gốc + CCCD đối chiếu chụp ảnh lưu file',
+      selectedCameraIds: ['cam-1', 'cam-5'], // Canon R50 + Sigma 56mm f/1.4
+      is6Hours: true,
+      returnTime: '17:00',
+      depositAmount: 2000000,
+      paidAmountPct: 0,
+      paidAmount: 0,
+      note: 'Học viên câu lạc bộ chụp ảnh thường niên. Hỗ trợ mượn kèm sạc dự phòng + thẻ nhớ 32GB miễn phí.'
+    },
+    {
+      id: 'tpl-2',
+      templateName: '🎥 Sự Kiện Sony Chuyên Nghiệp (2 ngày)',
+      customerName: 'Phan Anh Đức',
+      customerPhone: '0933441122',
+      customerDocType: 'Other',
+      customerDocNote: 'Giữ xe máy Wave S đỏ biển 29X3-128.91 + Đăng ký xe gốc chính chủ',
+      selectedCameraIds: ['cam-3', 'cam-4'], // Sony A7M4 + Sony 24-70GM II
+      is6Hours: false,
+      returnTime: '18:00',
+      depositAmount: 15000000,
+      paidAmountPct: 50,
+      paidAmount: 750000,
+      note: 'Chuẩn bị sẵn 4 pin sạc đầy hơi, dock sạc đôi & thẻ nhớ 128GB chuyên dụng chụp ảnh sự kiện RAW liên tục.'
+    },
+    {
+      id: 'tpl-3',
+      templateName: '🎞️ Nghệ Thuật Fujifilm Classic (1 ngày)',
+      customerName: 'Lê Minh Tú',
+      customerPhone: '0988776655',
+      customerDocType: 'Passport',
+      customerDocNote: 'Passport gốc chính chủ',
+      selectedCameraIds: ['cam-2'], // Fuji XS10
+      is6Hours: false,
+      returnTime: '18:00',
+      depositAmount: 5000000,
+      paidAmountPct: 100,
+      paidAmount: 250000,
+      note: 'Hỗ trợ reset thiết bị cài sẵn profile giả lập màu phim Classic Chrome của tiệm.'
+    }
+  ], []);
+
+  const [customTemplates, setCustomTemplates] = useState<ContractTemplate[]>(() => 
+    loadStoredData('custom_contract_templates', [])
+  );
+
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [showSaveTemplateForm, setShowSaveTemplateForm] = useState(false);
+
+  const allTemplates = useMemo(() => {
+    return [...DEFAULT_TEMPLATES, ...customTemplates];
+  }, [DEFAULT_TEMPLATES, customTemplates]);
+
+  const handleApplyTemplate = (tpl: ContractTemplate) => {
+    // Determine dynamic rate for the items in the template
+    const days = tpl.is6Hours ? 1 : 1; 
+    const dailyTotal = tpl.selectedCameraIds.reduce((sum, id) => {
+      const cam = cameras.find(c => c.id === id);
+      return sum + (cam ? getCameraRateForDuration(cam, days, tpl.is6Hours) : 0);
+    }, 0);
+
+    const calculatedTotalRate = tpl.is6Hours ? dailyTotal : dailyTotal * days;
+    let computedPaid = tpl.paidAmount;
+    if (tpl.paidAmountPct > 0) {
+      computedPaid = Math.round(calculatedTotalRate * (tpl.paidAmountPct / 100));
+    }
+
+    setNewContractForm({
+      customerName: tpl.customerName,
+      customerPhone: tpl.customerPhone,
+      customerDocType: tpl.customerDocType,
+      customerDocNote: tpl.customerDocNote,
+      selectedCameraIds: tpl.selectedCameraIds.filter(id => cameras.some(c => c.id === id)),
+      startDate: systemDate,
+      endDate: tpl.is6Hours ? systemDate : systemDate, 
+      is6Hours: tpl.is6Hours,
+      returnTime: tpl.returnTime || '18:00',
+      depositAmount: tpl.depositAmount,
+      paidAmount: computedPaid,
+      note: tpl.note
+    });
+
+    setCustomAlertMessage(`Đã đặt và áp dụng thành công mẫu đơn hàng: "${tpl.templateName}" vào biểu mẫu nhập hợp đồng!`);
+  };
+
+  const handleSaveAsTemplate = () => {
+    if (!newContractForm.customerName || newContractForm.selectedCameraIds.length === 0) {
+      setCustomAlertMessage('Vui lòng nhập tối thiểu tên khách thuê và chọn ít nhất 1 thiết bị để lưu mẫu đơn thuê!');
+      return;
+    }
+
+    const nameToUse = newTemplateName.trim() || `Mẫu đơn của ${newContractForm.customerName}`;
+    const newTpl: ContractTemplate = {
+      id: `tpl-custom-${Date.now()}`,
+      templateName: `📝 ${nameToUse}`,
+      customerName: newContractForm.customerName,
+      customerPhone: newContractForm.customerPhone,
+      customerDocType: newContractForm.customerDocType,
+      customerDocNote: newContractForm.customerDocNote,
+      selectedCameraIds: [...newContractForm.selectedCameraIds],
+      is6Hours: newContractForm.is6Hours,
+      returnTime: newContractForm.returnTime,
+      depositAmount: newContractForm.depositAmount,
+      paidAmountPct: 0,
+      paidAmount: newContractForm.paidAmount,
+      note: newContractForm.note
+    };
+
+    const updated = [...customTemplates, newTpl];
+    setCustomTemplates(updated);
+    saveStoredData('custom_contract_templates', updated);
+    setNewTemplateName('');
+    setShowSaveTemplateForm(false);
+    setCustomAlertMessage(`Đã khởi tạo và ghi nhớ mẫu đơn thuê mới thành công: "${nameToUse}"!`);
+  };
+
+  const handleDeleteCustomTemplate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = customTemplates.filter(t => t.id !== id);
+    setCustomTemplates(updated);
+    saveStoredData('custom_contract_templates', updated);
+  };
 
   // Filters calculation
   const filteredContracts = useMemo(() => {
@@ -879,7 +1009,7 @@ export default function ContractManager({
                       <div key={idx} className="p-2.5 sm:p-3 bg-white flex justify-between items-center text-xs sm:text-sm gap-2">
                         <div className="font-bold text-gray-850 hover:text-orange-650 truncate flex-1 min-w-0" title={i.cameraName}>{i.cameraName}</div>
                         <div className="text-right font-mono font-bold text-gray-650 shrink-0">
-                          {i.dailyRate.toLocaleString()}đ <span className="text-[10px] text-gray-400 font-normal">{selectedContract.is6Hours ? '/gói 6h' : '/ngày'}</span>
+                          {Math.round(i.dailyRate).toLocaleString()}đ <span className="text-[10px] text-gray-400 font-normal">{selectedContract.is6Hours ? '/gói 6h' : '/ngày'}</span>
                         </div>
                       </div>
                     ))}
@@ -1165,6 +1295,101 @@ export default function ContractManager({
             </div>
 
             <form onSubmit={handleCreateContract} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Quick Load Template Section */}
+              <div className="bg-orange-50/45 p-3.5 rounded-xl border border-orange-100/50 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-orange-950 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                    📋 Chọn mẫu đơn đặt thuê nhanh:
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-mono italic">Tự động điền</span>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {allTemplates.map((tpl) => (
+                      <div 
+                        key={tpl.id} 
+                        className="flex items-center justify-between bg-white hover:bg-orange-50/50 border border-gray-150 hover:border-orange-200/80 p-2.5 rounded-xl cursor-pointer transition-all shadow-4xs group"
+                        onClick={() => handleApplyTemplate(tpl)}
+                      >
+                        <div className="flex-1 min-w-0 pr-2">
+                          <p className="text-xs font-extrabold text-gray-850 truncate group-hover:text-orange-650 transition-colors">
+                            {tpl.templateName}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                            Khách: <strong className="text-gray-700">{tpl.customerName}</strong> • {tpl.selectedCameraIds.length} thiết bị • {tpl.is6Hours ? 'Thuê 6h' : 'Bằng ngày'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {tpl.id.startsWith('tpl-custom-') && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteCustomTemplate(tpl.id, e)}
+                              className="text-gray-400 hover:text-red-650 p-1 rounded-lg transition-colors cursor-pointer"
+                              title="Xóa mẫu tự chọn này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <span className="text-[10px] font-bold bg-orange-100 text-orange-850 px-2.5 py-1 rounded-lg border border-orange-150/50 group-hover:bg-orange-650 group-hover:text-white transition-all">
+                            Áp dụng
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Save current inputs as a Template */}
+                  <div className="border-t border-orange-100/50 pt-2 flex flex-col gap-2">
+                    {!showSaveTemplateForm ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newContractForm.customerName || newContractForm.selectedCameraIds.length === 0) {
+                            setCustomAlertMessage('Vui lòng điền thông tin họ tên khách thuê và chọn ít nhất 1 thiết bị trước khi lưu mẫu đơn thuê!');
+                            return;
+                          }
+                          setShowSaveTemplateForm(true);
+                        }}
+                        className="text-[11px] text-orange-755 hover:text-orange-900 font-bold flex items-center justify-center gap-1.5 hover:underline py-1.5 bg-white rounded-lg border border-orange-150 border-dashed cursor-pointer"
+                      >
+                        💾 Tạo mẫu đơn thuê mới từ thông tin hiện tại
+                      </button>
+                    ) : (
+                      <div className="bg-white border border-orange-150 rounded-xl p-2.5 space-y-2">
+                        <label className="block text-[10px] font-bold text-gray-600">Nhập tên cho mẫu đơn thuê mới:</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newTemplateName}
+                            onChange={(e) => setNewTemplateName(e.target.value)}
+                            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="VD: Gói Wedding Sự Kiện R50"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveAsTemplate}
+                            className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-3 py-1 rounded-lg cursor-pointer"
+                          >
+                            Lưu mẫu
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSaveTemplateForm(false);
+                              setNewTemplateName('');
+                            }}
+                            className="bg-gray-100 text-gray-600 text-xs px-2.5 py-1 rounded-lg hover:bg-gray-200 cursor-pointer"
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Họ tên khách hàng *</label>
@@ -1253,7 +1478,7 @@ export default function ContractManager({
                             {newContractForm.is6Hours 
                               ? `${(cam.price6Hours ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.6)).toLocaleString()}đ /6h`
                               : (calculatedDays > 0 
-                                ? `${getCameraRateForDuration(cam, calculatedDays, false).toLocaleString()}đ/ngày (${calculatedDays}n)` 
+                                ? `${Math.round(getCameraRateForDuration(cam, calculatedDays, false)).toLocaleString()}đ/ngày (${calculatedDays}n)` 
                                 : `${(cam.price1Day ?? cam.dailyRate).toLocaleString()}đ/ngày`
                               )
                             }

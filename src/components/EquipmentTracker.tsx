@@ -126,8 +126,8 @@ export default function EquipmentTracker({
       dailyRate: cam.dailyRate,
       price6Hours: cam.price6Hours ?? Math.round(cam.dailyRate * 0.6),
       price1Day: cam.price1Day ?? cam.dailyRate,
-      price2Days: (cam.price2Days ?? Math.round(cam.dailyRate * 0.9)) * 2,
-      price3Days: (cam.price3Days ?? Math.round(cam.dailyRate * 0.8)) * 3,
+      price2Days: Math.round((cam.price2Days ?? Math.round(cam.dailyRate * 0.9)) * 2),
+      price3Days: Math.round((cam.price3Days ?? Math.round(cam.dailyRate * 0.8)) * 3),
       price4DaysPlus: cam.price4DaysPlus ?? Math.round(cam.dailyRate * 0.7),
       status: cam.status,
       serialNumber: cam.serialNumber,
@@ -147,11 +147,11 @@ export default function EquipmentTracker({
 
     const imageRef = formState.image || 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=400';
     
-    // Chia 2 cho giá ngày thứ 2, chia 3 cho ngày thứ 3 để có đơn giá/ngày đúng
+    // Chia 2 cho giá ngày thứ 2, chia 3 cho ngày thứ 3 để có đơn giá/ngày đúng (giữ số thập phân chính xác tuyệt đối thay vì làm tròn)
     const savedFormState = {
       ...formState,
-      price2Days: Math.round(formState.price2Days / 2),
-      price3Days: Math.round(formState.price3Days / 3)
+      price2Days: formState.price2Days / 2,
+      price3Days: formState.price3Days / 3
     };
 
     if (editingCamera) {
@@ -411,11 +411,11 @@ export default function EquipmentTracker({
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 font-medium">Thuê 2 ngày:</span>
-                      <span className="font-mono text-gray-800 font-bold">{((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
+                      <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 font-medium">Thuê 3 ngày:</span>
-                      <span className="font-mono text-gray-800 font-bold">{((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
+                      <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 font-medium">Từ 4 ngày:</span>
@@ -460,11 +460,11 @@ export default function EquipmentTracker({
                       </div>
                       <div className="flex justify-between items-center px-1">
                         <span className="text-gray-500">Thuê 2 ngày:</span>
-                        <span className="font-mono text-gray-800 font-bold">{((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
+                        <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
                       </div>
                       <div className="flex justify-between items-center px-1">
                         <span className="text-gray-500">Thuê 3 ngày:</span>
-                        <span className="font-mono text-gray-800 font-bold">{((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
+                        <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
                       </div>
                       <div className="flex justify-between items-center px-1">
                         <span className="text-gray-500">Từ 4 ngày:</span>
