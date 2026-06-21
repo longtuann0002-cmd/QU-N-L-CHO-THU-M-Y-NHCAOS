@@ -41,3 +41,115 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* iOS Safe Area Utilities */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe-bottom-fit {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.mb-safe-bottom {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+.bottom-safe {
+  bottom: env(safe-area-inset-bottom);
+}
+
+/* Glassmorphism iOS style */
+.ios-glass {
+  background-color: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px) saturate(190%);
+  -webkit-backdrop-filter: blur(20px) saturate(190%);
+}
+
+.ios-glass-dark {
+  background-color: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(20px) saturate(190%);
+  -webkit-backdrop-filter: blur(20px) saturate(190%);
+}
+
+/* Smooth iOS scroll behavior */
+.ios-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tap Highlight Removal */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Bottom Sheet Animations & Layouts */
+@keyframes slideUpIos {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up-ios {
+  animation: slideUpIos 0.32s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes backdropFadeIn {
+  from {
+    background-color: rgba(0, 0, 0, 0);
+  }
+  to {
+    background-color: rgba(0, 0, 0, 0.6);
+  }
+}
+
+.animate-backdrop-fade {
+  animation: backdropFadeIn 0.32s ease-out forwards;
+}
+
+.ios-bottom-sheet-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  padding: 1rem;
+}
+
+@media (max-width: 767px) {
+  .ios-bottom-sheet-container {
+    align-items: flex-end;
+    padding: 0;
+  }
+}
+
+.ios-bottom-sheet {
+  background-color: #ffffff;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .ios-bottom-sheet {
+    border-top-left-radius: 1.5rem; /* 24px */
+    border-top-right-radius: 1.5rem;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    max-height: 92vh;
+    animation: slideUpIos 0.35s cubic-bezier(0.15, 0.85, 0.35, 1) forwards;
+  }
+}
+
+@media (min-width: 768px) {
+  .ios-bottom-sheet {
+    border-radius: 1rem; /* 16px */
+    max-height: 85vh;
+    animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+

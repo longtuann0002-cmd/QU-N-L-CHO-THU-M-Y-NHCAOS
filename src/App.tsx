@@ -1862,95 +1862,102 @@ export default function App() {
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
 
         {/* TOP BAR */}
-        <header className="bg-white/90 backdrop-blur-md border-b border-gray-100 sticky top-0 z-20 shadow-xs">
-          <div className="flex items-center h-14 px-4 sm:px-6 gap-3">
+        <header className="bg-white/90 backdrop-blur-md border-b border-gray-100 sticky top-0 z-20 shadow-xs pt-safe">
+          <div className="flex items-center justify-between h-14 px-4 sm:px-6 gap-3">
 
-            {/* Mobile: Logo button */}
-            <button
-              type="button"
-              onClick={() => setShowLogoModal(true)}
-              className="md:hidden flex items-center gap-2 mr-1 shrink-0"
-            >
-              {logoIconType === 'upload' && logoBase64 ? (
-                <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
-                  <img src={logoBase64} alt="Logo" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <span className="w-8 h-8 rounded-lg text-white flex items-center justify-center shrink-0" style={{ backgroundColor: logoIconColor }}>
-                  {logoIconType === 'aperture' && <Aperture className="w-4 h-4" />}
-                  {logoIconType === 'film' && <Film className="w-4 h-4" />}
-                  {logoIconType === 'sparkles' && <Sparkles className="w-4 h-4" />}
-                  {logoIconType === 'smile' && <Smile className="w-4 h-4" />}
-                  {logoIconType === 'image' && <ImageIcon className="w-4 h-4" />}
-                  {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-4 h-4" />}
-                </span>
-              )}
-            </button>
-
-            {/* Breadcrumb / Page Title */}
-            <div className="flex-1 min-w-0 flex items-center gap-2">
-              <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest hidden sm:block shrink-0">Hệ thống vận hành</span>
-              <ChevronRight className="w-3 h-3 text-gray-300 hidden sm:block shrink-0" />
-              <h1 className="text-sm font-bold text-gray-900 truncate">
-                {activeTab === 'calendar' && 'Lịch máy'}
-                {activeTab === 'contracts' && 'Đơn thuê'}
-                {activeTab === 'equipment' && 'Kho thiết bị'}
-                {activeTab === 'revenue' && 'Báo cáo doanh thu'}
-                {activeTab === 'customers' && 'Hồ sơ khách hàng'}
-                {activeTab === 'expenses' && 'Nhật ký khoản chi'}
-              </h1>
-            </div>
-
-            {/* Live date badge */}
-            <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-gray-400 bg-gray-50 border border-gray-150 px-2.5 py-1.5 rounded-lg font-mono shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-bold text-gray-600">{systemDate}</span>
-            </div>
-
-            {/* Notification Center */}
-            <NotificationCenter
-              contracts={contracts}
-              cameras={cameras}
-              onUpdateContractStatus={handleUpdateContractStatus}
-              systemDate={systemDate}
-              setSystemDate={handleUpdateSystemDate}
-              isDateSimulated={isDateSimulated}
-              onResetSystemDate={handleResetSystemDate}
-            />
-
-            {/* Mobile: Profile button */}
-            <div className="md:hidden relative shrink-0">
+            {/* Left Section: Mobile Logo */}
+            <div className="flex items-center md:hidden shrink-0">
               <button
                 type="button"
-                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="w-8 h-8 rounded-lg overflow-hidden border border-gray-200 cursor-pointer"
+                onClick={() => setShowLogoModal(true)}
+                className="flex items-center gap-2 mr-1 active:scale-95 transition-transform"
               >
-                <img
-                  src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'}
-                  alt="Avatar"
-                  className="w-full h-full object-cover"
-                />
-              </button>
-              {profileDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileDropdownOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl shadow-xl border border-gray-150 py-2.5 z-50 animate-fade-in text-left">
-                    <div className="px-4 pb-2.5 border-b border-gray-100 select-none">
-                      <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider">Đang đăng nhập</span>
-                      <span className="block text-sm font-bold text-gray-900 mt-0.5">{currentUser?.fullName}</span>
-                      <span className="text-xs text-gray-400 font-mono">@{currentUser?.username}</span>
-                    </div>
-                    <div className="pt-1.5 pb-1 px-1.5 space-y-0.5">
-                      <button type="button" onClick={() => { setProfileDropdownOpen(false); setChangePasswordError(''); setChangePasswordSuccess(''); setShowChangePasswordModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Key className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi mật khẩu</span></button>
-                      <button type="button" onClick={() => { setProfileDropdownOpen(false); setSelectedAvatarUrl(currentUser?.avatar || ''); setShowChangeAvatarModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><User className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi ảnh đại diện</span></button>
-                      {currentUser?.role === 'admin' && <button type="button" onClick={() => { setProfileDropdownOpen(false); setStaffError(''); setShowManageUsersModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Settings className="w-4 h-4 text-gray-400 shrink-0" /><span>Quản lý tài khoản</span></button>}
-                      <button type="button" onClick={() => { setProfileDropdownOpen(false); setImportError(''); setShowBackupModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Database className="w-4 h-4 text-orange-500 shrink-0" /><span className="font-bold text-gray-800">Sao lưu & Khôi phục</span></button>
-                      <div className="h-px bg-gray-100 my-1 mx-2" />
-                      <button type="button" onClick={handleLogout} className="w-full px-3 py-2 rounded-xl text-left text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition flex items-center gap-2.5 cursor-pointer"><LogOut className="w-4 h-4 shrink-0" /><span>Đăng xuất</span></button>
-                    </div>
+                {logoIconType === 'upload' && logoBase64 ? (
+                  <div className="w-8.5 h-8.5 rounded-xl overflow-hidden border border-gray-100 shadow-xs shrink-0">
+                    <img src={logoBase64} alt="Logo" className="w-full h-full object-cover" />
                   </div>
-                </>
-              )}
+                ) : (
+                  <span className="w-8.5 h-8.5 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0" style={{ backgroundColor: logoIconColor }}>
+                    {logoIconType === 'aperture' && <Aperture className="w-4.5 h-4.5" />}
+                    {logoIconType === 'film' && <Film className="w-4.5 h-4.5" />}
+                    {logoIconType === 'sparkles' && <Sparkles className="w-4.5 h-4.5" />}
+                    {logoIconType === 'smile' && <Smile className="w-4.5 h-4.5" />}
+                    {logoIconType === 'image' && <ImageIcon className="w-4.5 h-4.5" />}
+                    {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-4.5 h-4.5" />}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Center Section: Breadcrumb & Title */}
+            <div className="flex-1 min-w-0 flex items-center justify-start md:justify-start max-md:justify-center">
+              <div className="flex items-center gap-2 max-md:text-center">
+                <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest hidden sm:block shrink-0">Hệ thống vận hành</span>
+                <ChevronRight className="w-3 h-3 text-gray-300 hidden sm:block shrink-0" />
+                <h1 className="text-sm md:text-base font-extrabold text-gray-900 tracking-tight max-md:text-center max-md:font-bold">
+                  {activeTab === 'calendar' && 'Lịch máy'}
+                  {activeTab === 'contracts' && 'Đơn thuê'}
+                  {activeTab === 'equipment' && 'Kho thiết bị'}
+                  {activeTab === 'revenue' && 'Báo cáo doanh thu'}
+                  {activeTab === 'customers' && 'Hồ sơ khách hàng'}
+                  {activeTab === 'expenses' && 'Nhật ký khoản chi'}
+                </h1>
+              </div>
+            </div>
+
+            {/* Right Section: Badges & Controls */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Live date badge */}
+              <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-gray-400 bg-gray-50 border border-gray-150 px-2.5 py-1.5 rounded-lg font-mono shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-bold text-gray-600">{systemDate}</span>
+              </div>
+
+              {/* Notification Center */}
+              <NotificationCenter
+                contracts={contracts}
+                cameras={cameras}
+                onUpdateContractStatus={handleUpdateContractStatus}
+                systemDate={systemDate}
+                setSystemDate={handleUpdateSystemDate}
+                isDateSimulated={isDateSimulated}
+                onResetSystemDate={handleResetSystemDate}
+              />
+
+              {/* Mobile: Profile button */}
+              <div className="md:hidden relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="w-8.5 h-8.5 rounded-xl overflow-hidden border border-gray-200 cursor-pointer shadow-xs active:scale-95 transition-transform flex items-center justify-center bg-gray-50"
+                >
+                  <img
+                    src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'}
+                    alt="Avatar"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+                {profileDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileDropdownOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl shadow-xl border border-gray-150 py-2.5 z-50 animate-fade-in text-left">
+                      <div className="px-4 pb-2.5 border-b border-gray-100 select-none">
+                        <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider">Đang đăng nhập</span>
+                        <span className="block text-sm font-bold text-gray-900 mt-0.5">{currentUser?.fullName}</span>
+                        <span className="text-xs text-gray-400 font-mono">@{currentUser?.username}</span>
+                      </div>
+                      <div className="pt-1.5 pb-1 px-1.5 space-y-0.5">
+                        <button type="button" onClick={() => { setProfileDropdownOpen(false); setChangePasswordError(''); setChangePasswordSuccess(''); setShowChangePasswordModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Key className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi mật khẩu</span></button>
+                        <button type="button" onClick={() => { setProfileDropdownOpen(false); setSelectedAvatarUrl(currentUser?.avatar || ''); setShowChangeAvatarModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><User className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi ảnh đại diện</span></button>
+                        {currentUser?.role === 'admin' && <button type="button" onClick={() => { setProfileDropdownOpen(false); setStaffError(''); setShowManageUsersModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Settings className="w-4 h-4 text-gray-400 shrink-0" /><span>Quản lý tài khoản</span></button>}
+                        <button type="button" onClick={() => { setProfileDropdownOpen(false); setImportError(''); setShowBackupModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Database className="w-4 h-4 text-orange-500 shrink-0" /><span className="font-bold text-gray-800">Sao lưu & Khôi phục</span></button>
+                        <div className="h-px bg-gray-100 my-1 mx-2" />
+                        <button type="button" onClick={handleLogout} className="w-full px-3 py-2 rounded-xl text-left text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition flex items-center gap-2.5 cursor-pointer"><LogOut className="w-4 h-4 shrink-0" /><span>Đăng xuất</span></button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1958,7 +1965,7 @@ export default function App() {
         </header>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 md:pb-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-36 md:pb-8">
           <div className="max-w-7xl mx-auto space-y-6">
 
             {/* Page Section Header */}
@@ -2070,40 +2077,48 @@ export default function App() {
         </footer>
 
         {/* Mobile: Fixed Bottom Navigation Bar */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center justify-around px-1 py-1 pb-safe">
+        <div className="md:hidden fixed bottom-4 left-4 right-4 z-40 ios-glass border border-white/50 shadow-[0_12px_32px_rgba(0,0,0,0.12)] rounded-2xl overflow-hidden mb-safe-bottom">
+          <nav className="flex items-center justify-around px-2 py-1.5">
             {([
               { key: 'calendar' as const, icon: <Calendar className="w-5 h-5" />, label: 'Lịch máy', show: true },
               { key: 'contracts' as const, icon: <FileText className="w-5 h-5" />, label: 'Đơn thuê', show: true },
               { key: 'equipment' as const, icon: <CameraIcon className="w-5 h-5" />, label: 'Thiết bị', show: true },
-              { key: 'customers' as const, icon: <Users className="w-5 h-5" />, label: 'Khách hàng', show: true },
+              { key: 'customers' as const, icon: <Users className="w-5 h-5" />, label: 'Khách', show: true },
               { key: 'revenue' as const, icon: <TrendingUp className="w-5 h-5" />, label: 'Doanh thu', show: currentUser?.role === 'admin' },
-              { key: 'expenses' as const, icon: <DollarSign className="w-5 h-5" />, label: 'Khoản chi', show: currentUser?.role === 'admin' },
+              { key: 'expenses' as const, icon: <DollarSign className="w-5 h-5" />, label: 'Chi', show: currentUser?.role === 'admin' },
             ] as const).filter(item => item.show).map(item => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setActiveTab(item.key)}
-                className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 py-2 rounded-xl transition-all duration-150 cursor-pointer select-none ${
-                  activeTab === item.key ? 'text-orange-600' : 'text-gray-400'
+                className={`relative flex flex-col items-center justify-center gap-1 flex-1 py-1.5 rounded-xl transition-all duration-350 cursor-pointer select-none active:scale-95 ${
+                  activeTab === item.key 
+                    ? 'text-orange-600 font-extrabold' 
+                    : 'text-gray-400 hover:text-gray-600 font-medium'
                 }`}
               >
-                {activeTab === item.key && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-orange-500" />
-                )}
-                <span className={`transition-transform duration-150 ${ activeTab === item.key ? 'scale-110' : 'scale-100' }`}>
+                <div className={`p-1.5 rounded-xl transition-all duration-350 ${
+                  activeTab === item.key 
+                    ? 'bg-orange-500/10 text-orange-600 scale-110 shadow-xs' 
+                    : 'bg-transparent text-gray-400'
+                }`}>
                   {item.icon}
-                </span>
-                <span className="text-[9px] font-bold leading-none">{item.label}</span>
+                </div>
+                <span className="text-[9px] tracking-wide leading-none">{item.label}</span>
+                {activeTab === item.key && (
+                  <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-orange-600 animate-pulse" />
+                )}
               </button>
             ))}
-          </div>
-        </nav>
+          </nav>
+        </div>
 
       </div>
       {showLogoModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade">
+          <div className="ios-bottom-sheet md:max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+            {/* iOS Pull Handle */}
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
             
             {/* Modal Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2422,8 +2437,10 @@ export default function App() {
 
       {/* Change Password Modal */}
       {showChangePasswordModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
+          <div className="ios-bottom-sheet md:max-w-md w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+            {/* iOS Pull Handle */}
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2525,8 +2542,10 @@ export default function App() {
 
       {/* Change Avatar Modal */}
       {showChangeAvatarModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
+          <div className="ios-bottom-sheet md:max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+            {/* iOS Pull Handle */}
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2673,8 +2692,10 @@ export default function App() {
 
       {/* Admin User / Account Management Modal */}
       {showManageUsersModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-white rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[85vh]">
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
+          <div className="ios-bottom-sheet md:max-w-3xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+            {/* iOS Pull Handle */}
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2888,8 +2909,10 @@ export default function App() {
 
       {/* Sao lưu & Khôi phục Dữ liệu Modal */}
       {showBackupModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
+          <div className="ios-bottom-sheet md:max-w-xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+            {/* iOS Pull Handle */}
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
