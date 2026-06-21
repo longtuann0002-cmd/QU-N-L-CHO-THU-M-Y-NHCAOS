@@ -28,6 +28,7 @@ import {
   loadSetting,
   saveSetting,
   seedSettingsFromLocal,
+  syncLocalDataToSupabase,
 } from './lib/db';
 import { isSupabaseConfigured } from './lib/supabase';
 
@@ -287,6 +288,8 @@ export default function App() {
         await seedSettingsFromLocal([
           'logoText', 'logoSubtitle', 'logoIconType', 'logoIconColor', 'logoBase64', 'registeredUsers'
         ]);
+        // Đồng bộ dữ liệu nghiệp vụ (cameras, contracts, customers, expenses) từ local lên cloud
+        await syncLocalDataToSupabase();
 
         const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, rUsers] = await Promise.all([
           fetchCameras(),
@@ -407,6 +410,27 @@ export default function App() {
 
   useEffect(() => { saveStoredData('currentUser', currentUser); }, [currentUser]);
   useEffect(() => { saveStoredData('camlease_snapshots', snapshots); }, [snapshots]);
+
+  // Luôn đồng bộ dữ liệu nghiệp vụ về localStorage làm local cache / offline fallback
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('cameras', cameras);
+  }, [cameras, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('contracts', contracts);
+  }, [contracts, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('customers', customers);
+  }, [customers, dbLoading]);
+
+  useEffect(() => {
+    if (dbLoading) return;
+    saveStoredData('expenses', expenses);
+  }, [expenses, dbLoading]);
 
   // ── Cập nhật selectedDate về ngày hợp đồng gần nhất sau khi contracts load ──
   useEffect(() => {

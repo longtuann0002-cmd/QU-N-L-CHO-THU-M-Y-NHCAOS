@@ -76,10 +76,11 @@ export async function fetchCameras(): Promise<Camera[]> {
     console.error('[db] fetchCameras error:', error.message);
     return localLoad('cameras', INITIAL_CAMERAS);
   }
-  // Nếu bảng trống, seed dữ liệu mẫu
+  // Nếu bảng trống, seed dữ liệu từ localStorage
   if (!data || data.length === 0) {
-    await seedCameras(INITIAL_CAMERAS);
-    return INITIAL_CAMERAS;
+    const localVal = localLoad('cameras', INITIAL_CAMERAS);
+    await seedCameras(localVal);
+    return localVal;
   }
   return data.map(rowToCamera);
 }
@@ -151,8 +152,9 @@ export async function fetchCustomers(): Promise<Customer[]> {
     return localLoad('customers', INITIAL_CUSTOMERS);
   }
   if (!data || data.length === 0) {
-    await seedCustomers(INITIAL_CUSTOMERS);
-    return INITIAL_CUSTOMERS;
+    const localVal = localLoad('customers', INITIAL_CUSTOMERS);
+    await seedCustomers(localVal);
+    return localVal;
   }
   return data.map(rowToCustomer);
 }
@@ -241,8 +243,9 @@ export async function fetchContracts(): Promise<RentalContract[]> {
     return localLoad('contracts', INITIAL_CONTRACTS);
   }
   if (!data || data.length === 0) {
-    await seedContracts(INITIAL_CONTRACTS);
-    return INITIAL_CONTRACTS;
+    const localVal = localLoad('contracts', INITIAL_CONTRACTS);
+    await seedContracts(localVal);
+    return localVal;
   }
   return data.map(rowToContract);
 }
@@ -307,8 +310,9 @@ export async function fetchExpenses(): Promise<Expense[]> {
     return localLoad('expenses', INITIAL_EXPENSES);
   }
   if (!data || data.length === 0) {
-    await seedExpenses(INITIAL_EXPENSES);
-    return INITIAL_EXPENSES;
+    const localVal = localLoad('expenses', INITIAL_EXPENSES);
+    await seedExpenses(localVal);
+    return localVal;
   }
   return data.map(rowToExpense);
 }
@@ -411,5 +415,64 @@ export async function seedSettingsFromLocal(keys: string[]): Promise<void> {
     if (error) console.error('[db] seedSettingsFromLocal error:', error.message);
   } catch (err) {
     console.error('[db] seedSettingsFromLocal error:', err);
+  }
+}
+
+/**
+ * Đồng bộ tất cả dữ liệu từ localStorage lên Supabase nếu trên Supabase chưa có (tránh ghi đè).
+ * Giúp bảo toàn dữ liệu khi người dùng chạy offline rồi cấu hình Supabase.
+ */
+export async function syncLocalDataToSupabase(): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    // 1. Sync Cameras
+    const localCams = localLoad<Camera[]>('cameras', []);
+    if (localCams.length > 0) {
+      const { data: dbCams } = await supabase.from('cameras').select('id');
+      const dbCamIds = new Set((dbCams || []).map(r => r.id));
+      const newCams = localCams.filter(c => !dbCamIds.has(c.id));
+      if (newCams.length > 0) {
+        await upsertCameras(newCams);
+        console.log(`[db] Synced ${newCams.length} new cameras from local.`);
+      }
+    }
+
+    // 2. Sync Customers
+    const localCusts = localLoad<Customer[]>('customers', []);
+    if (localCusts.length > 0) {
+      const { data: dbCusts } = await supabase.from('customers').select('id');
+      const dbCustIds = new Set((dbCusts || []).map(r => r.id));
+      const newCusts = localCusts.filter(c => !dbCustIds.has(c.id));
+      if (newCusts.length > 0) {
+        await upsertCustomers(newCusts);
+        console.log(`[db] Synced ${newCusts.length} new customers from local.`);
+      }
+    }
+
+    // 3. Sync Contracts
+    const localCons = localLoad<RentalContract[]>('contracts', []);
+    if (localCons.length > 0) {
+      const { data: dbCons } = await supabase.from('contracts').select('id');
+      const dbConIds = new Set((dbCons || []).map(r => r.id));
+      const newCons = localCons.filter(c => !dbConIds.has(c.id));
+      if (newCons.length > 0) {
+        await upsertContracts(newCons);
+        console.log(`[db] Synced ${newCons.length} new contracts from local.`);
+      }
+    }
+
+    // 4. Sync Expenses
+    const localExps = localLoad<Expense[]>('expenses', []);
+    if (localExps.length > 0) {
+      const { data: dbExps } = await supabase.from('expenses').select('id');
+      const dbExpIds = new Set((dbExps || []).map(r => r.id));
+      const newExps = localExps.filter(e => !dbExpIds.has(e.id));
+      if (newExps.length > 0) {
+        await upsertExpenses(newExps);
+        console.log(`[db] Synced ${newExps.length} new expenses from local.`);
+      }
+    }
+  } catch (err) {
+    console.error('[db] syncLocalDataToSupabase error:', err);
   }
 }
