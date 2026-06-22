@@ -1,9 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Retrieve Supabase environment credentials using safe typing
-const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = metaEnv.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string) || '';
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
 
 // Safely evaluate if Supabase is properly configured in settings
 export const isSupabaseConfigured = !!(
