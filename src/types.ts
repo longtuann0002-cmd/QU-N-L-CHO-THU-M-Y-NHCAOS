@@ -23,7 +23,7 @@ export interface RentalContract {
   customerId: string;
   customerName: string;
   customerPhone: string;
-  customerDocType: 'CCCD' | 'GPLX' | 'Passport' | 'CashDeposit' | 'Other';
+  customerDocType: 'CCCD' | 'GPLX' | 'Passport' | 'CashDeposit' | 'CCCD_And_1M' | 'Other';
   customerDocNote?: string; // e.g. "Giữ CCCD gốc + Xe máy"
   items: {
     cameraId: string;
@@ -75,7 +75,7 @@ export interface ContractTemplate {
   templateName: string;
   customerName: string;
   customerPhone: string;
-  customerDocType: 'CCCD' | 'GPLX' | 'Passport' | 'CashDeposit' | 'Other';
+  customerDocType: 'CCCD' | 'GPLX' | 'Passport' | 'CashDeposit' | 'CCCD_And_1M' | 'Other';
   customerDocNote: string;
   selectedCameraIds: string[];
   is6Hours: boolean;
@@ -84,5 +84,6 @@ export interface ContractTemplate {
   paidAmountPct: number;
   paidAmount: number;
   note: string;
+  durationDays?: number;
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Camera, RentalContract, BankConfig } from '../types';
 import { Plus, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Camera as CameraIcon, AlertTriangle, CheckCircle, Info, Trash2, QrCode, Settings, Phone } from 'lucide-react';
 import { getCameraRateForDuration, checkBookingConflict } from '../utils/pricing';
@@ -114,6 +114,8 @@ export default function BookingCalendar({
     note: '',
   });
 
+  const [prevCalculatedTotal, setPrevCalculatedTotal] = useState(0);
+
   const calculatedDays = useMemo(() => {
     if (formData.is6Hours) return 1;
     if (!formData.startDate || !formData.endDate) return 0;
@@ -130,6 +132,35 @@ export default function BookingCalendar({
     }, 0);
     return formData.is6Hours ? dailyTotal : dailyTotal * calculatedDays;
   }, [formData.selectedCameraIds, calculatedDays, formData.is6Hours, cameras]);
+
+  const getCameraRecommendedDeposit = (id: string): number => {
+    switch (id) {
+      case 'cam-1': return 2000000; // Canon EOS R50
+      case 'cam-2': return 5000000; // Fujifilm X-S15
+      case 'cam-3': return 10000000; // Sony A7M4
+      case 'cam-4': return 5000000; // Sony FE 24-70mm GM II
+      case 'cam-5': return 1000000; // Sigma 56mm f/1.4
+      default: return 2000000;
+    }
+  };
+
+  const calculatedRecommendedDeposit = useMemo(() => {
+    return formData.selectedCameraIds.reduce((sum, id) => sum + getCameraRecommendedDeposit(id), 0);
+  }, [formData.selectedCameraIds]);
+
+  // Synchronize dynamic reservation deposit value, defaulting to exactly 50% of calculated total price
+  useEffect(() => {
+    if (calculatedTotal !== prevCalculatedTotal) {
+      const prevHalfPrice = Math.round(prevCalculatedTotal * 0.5);
+      if (formData.paidAmount === 0 || formData.paidAmount === prevHalfPrice) {
+        setFormData(prev => ({
+          ...prev,
+          paidAmount: Math.round(calculatedTotal * 0.5)
+        }));
+      }
+      setPrevCalculatedTotal(calculatedTotal);
+    }
+  }, [calculatedTotal, prevCalculatedTotal, formData.paidAmount]);
 
   // Calculate grid info for the rendered month OR week
   const calendarDays = useMemo(() => {
@@ -444,8 +475,8 @@ export default function BookingCalendar({
             </div>
             <div className="min-w-0 flex-1">
               <h3 className="font-extrabold text-[11px] sm:text-xs text-gray-900 truncate leading-tight" title={cam.name}>{cam.name}</h3>
-              <p className="text-[9px] sm:text-[10px] opacity-80 font-medium font-mono mt-0.5 truncate leading-none">{cam.serialNumber}</p>
-              <p className="text-[10px] sm:text-[11px] font-bold mt-1 flex items-center gap-1 leading-none">
+              <p className="text-[9px] sm:text-[10px] opacity-80 font-medium font-mono mt-0.5 truncate leading-normal">{cam.serialNumber}</p>
+              <p className="text-[10px] sm:text-[11px] font-bold mt-1 flex items-center gap-1 leading-normal">
                 <span className="w-1.5 h-1.5 rounded-full bg-current inline-block shrink-0 animate-pulse"></span>
                 <span className="truncate">{cam.statusText}</span>
               </p>
@@ -455,67 +486,72 @@ export default function BookingCalendar({
       </div>
 
       {/* Main Calendar Section */}
-      <div className="bg-white border border-gray-150/70 rounded-2xl shadow-sm p-3.5 sm:p-5">
+      <div className="bg-white border border-gray-150/70 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm">
         {/* Calendar Header with Navigation */}
-        <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-center gap-4 mb-4 border-b border-gray-100 pb-4">
-          <div className="space-y-0.5">
-            <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2 select-none">
-              <CalendarIcon className="text-orange-600 w-5 h-5" /> Lịch Máy Ảnh
+        <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-center gap-3.5 sm:gap-4 mb-3 sm:mb-4 border-b border-gray-100 pb-3.5 sm:pb-4">
+          <div className="space-y-0.5 flex items-center justify-between xl:block">
+            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2 select-none">
+              <CalendarIcon className="text-orange-600 w-4.5 h-4.5 sm:w-5 sm:h-5 bg-orange-50 p-1 rounded-md sm:bg-transparent sm:p-0 shrink-0" /> Lịch Máy Ảnh
             </h2>
             <p className="text-gray-500 text-xs hidden sm:block">
               Phân tích trạng thái trống, lịch trực và đặt lịch thuê thiết bị nhanh chóng.
             </p>
           </div>
 
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full xl:w-auto">
-            {/* View Switcher: Tháng / Tuần */}
-            <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-150 text-xs font-bold w-full md:w-auto">
-              <button
-                type="button"
-                onClick={() => setViewMode('month')}
-                className={`flex-1 md:flex-initial text-center px-4 py-2 rounded-lg transition-all cursor-pointer ${
-                  viewMode === 'month'
-                    ? 'bg-white text-orange-600 shadow-3xs border border-gray-200/40'
-                    : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                Theo tháng
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('week')}
-                className={`flex-1 md:flex-initial text-center px-4 py-2 rounded-lg transition-all cursor-pointer ${
-                  viewMode === 'week'
-                    ? 'bg-white text-orange-600 shadow-3xs border border-gray-200/40'
-                    : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                Theo tuần
-              </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full xl:w-auto">
+            {/* Mobile optimization: display view mode switcher and prev/next date side-by-side or stacked cleanly */}
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+              {/* View Switcher: Tháng / Tuần */}
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-150 text-[10.5px] sm:text-xs font-bold w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('month')}
+                  className={`flex-1 text-center px-2 sm:px-4 py-1.5 rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                    viewMode === 'month'
+                      ? 'bg-white text-orange-600 shadow-3xs border border-gray-200/40 font-extrabold'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  Theo tháng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('week')}
+                  className={`flex-1 text-center px-2 sm:px-4 py-1.5 rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                    viewMode === 'week'
+                      ? 'bg-white text-orange-600 shadow-3xs border border-gray-200/40 font-extrabold'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  Theo tuần
+                </button>
+              </div>
+
+              {/* Timeframe selector header prev/next */}
+              <div className="flex items-center justify-between border border-gray-200 rounded-lg bg-gray-50/80 p-0.5 w-full sm:w-auto gap-1">
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  className="p-1 sm:p-1.5 text-gray-650 hover:bg-white hover:text-gray-900 rounded-md transition-all cursor-pointer shrink-0"
+                  title={viewMode === 'month' ? "Tháng trước" : "Tuần trước"}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.7]" />
+                </button>
+                <span className="px-1.5 font-extrabold text-gray-800 text-[11px] sm:text-xs text-center select-none truncate flex-1 sm:min-w-[120px]">
+                  {viewMode === 'month' ? `${currentMonth}/${currentYear}` : 'Lịch tuần'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="p-1 sm:p-1.5 text-gray-650 hover:bg-white hover:text-gray-900 rounded-md transition-all cursor-pointer shrink-0"
+                  title={viewMode === 'month' ? "Tháng sau" : "Tuần sau"}
+                >
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.7]" />
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between border border-gray-200 rounded-xl bg-gray-50 p-1 w-full md:w-auto gap-2">
-              <button
-                type="button"
-                onClick={handlePrev}
-                className="p-2 text-gray-650 hover:bg-white hover:text-gray-900 rounded-lg transition-all cursor-pointer shrink-0"
-                title={viewMode === 'month' ? "Tháng trước" : "Tuần trước"}
-              >
-                <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-              </button>
-              <span className="px-2 font-extrabold text-gray-800 text-xs sm:text-sm text-center select-none truncate flex-1 md:min-w-[130px]">
-                {viewMode === 'month' ? `Tháng ${currentMonth} / ${currentYear}` : 'Lịch tuần này'}
-              </span>
-              <button
-                type="button"
-                onClick={handleNext}
-                className="p-2 text-gray-650 hover:bg-white hover:text-gray-900 rounded-lg transition-all cursor-pointer shrink-0"
-                title={viewMode === 'month' ? "Tháng sau" : "Tuần sau"}
-              >
-                <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-              </button>
-            </div>
-
+            {/* Save / Add Quick Button */}
             <button
               onClick={() => {
                 setFormData(prev => ({
@@ -525,28 +561,27 @@ export default function BookingCalendar({
                 }));
                 setShowAddQuickModal(true);
               }}
-              className="px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-3xs transition-all w-full md:w-auto h-11 active:scale-[0.98] bg-orange-600 text-white hover:bg-orange-700 cursor-pointer"
+              className="px-3.5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-black text-[11px] sm:text-sm flex items-center justify-center gap-1.5 shadow-2xs sm:shadow-3xs transition-all w-full sm:w-auto h-9 sm:h-11 active:scale-[0.98] bg-orange-600 text-white hover:bg-orange-700 cursor-pointer uppercase tracking-wider"
               title="Đặt lịch nhanh"
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" /> Đặt lịch nhanh
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" /> Đặt lịch nhanh
             </button>
           </div>
         </div>
 
-        {/* Swipe helper hint for mobile */}
-        <div className="flex lg:hidden items-center justify-between text-[10.5px] text-orange-850 font-bold tracking-tight bg-orange-50/40 px-3 py-2.5 rounded-xl border border-orange-100/60 mb-3 animate-pulse select-none">
+        {/* Swipe / tap helper hint for mobile */}
+        <div className="flex sm:hidden items-center justify-between text-[10px] text-orange-850 font-bold tracking-tight bg-orange-50/40 px-3 py-2 rounded-lg border border-orange-100/50 mb-2.5 select-none">
           <span className="flex items-center gap-1">
-            ⚡ Vuốt ngang để xem lịch các ngày ➔
+            ⚡ Chạm ngày bất kỳ để xem nhanh chi tiết lịch thuê ở dưới
           </span>
-          <span className="text-gray-400 font-normal text-[10px]">Bấm ngày để chọn</span>
         </div>
 
-        {/* localized horizontal scroll container for responsive viewports */}
-        <div className="overflow-x-auto w-full scrollbar-none pb-2">
-          <div className="min-w-[750px] lg:min-w-0 pr-1">
+        {/* Outer Grid Wrapper: fluid without requiring annoying horizontal scroll on mobile screen container grids */}
+        <div className="w-full pb-1">
+          <div className="w-full">
             
             {/* Day Grid Headers */}
-            <div className="grid grid-cols-7 gap-1 bg-gray-50/70 p-2 rounded-xl text-center font-bold text-gray-500 text-xs tracking-wider mb-2 select-none">
+            <div className="grid grid-cols-7 gap-1 bg-gray-50/70 py-1.5 sm:py-2 px-0.5 sm:px-2 rounded-lg sm:rounded-xl text-center font-black text-gray-500 text-[10.5px] sm:text-xs tracking-wider mb-1.5 sm:mb-2 select-none">
               <div>CN</div>
               <div>T2</div>
               <div>T3</div>
@@ -557,7 +592,7 @@ export default function BookingCalendar({
             </div>
 
             {/* Calendar Day Cells */}
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {calendarDays.map(({ day, isCurrentMonth, dateString }) => {
                 const bookings = dayBookingsMap[dateString] || [];
                 const bookingCount = bookings.length;
@@ -581,34 +616,58 @@ export default function BookingCalendar({
                   <div
                     key={dateString}
                     onClick={() => handleDayClick(dateString)}
-                    className={`border rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 cursor-pointer transition-all flex flex-col justify-between ${statusStyle} ${monthStyle} ${
+                    className={`border rounded-lg sm:rounded-xl p-1 sm:p-2 cursor-pointer transition-all flex flex-col justify-between ${statusStyle} ${monthStyle} ${
                       isSelected ? 'ring-2 ring-orange-500/25 border-orange-500 bg-orange-50/10 shadow-xs' : 'hover:shadow-3xs'
-                    } ${viewMode === 'week' ? 'min-h-[140px] sm:min-h-[160px]' : 'min-h-[80px] sm:min-h-[90px]'}`}
+                    } ${viewMode === 'week' ? 'min-h-[75px] sm:min-h-[160px]' : 'min-h-[48px] sm:min-h-[90px]'}`}
                   >
                     {/* Cell Header: Day number + count badge */}
-                    <div className="flex justify-between items-center pb-1">
-                      <span className={`text-[11px] sm:text-xs font-extrabold ${isCurrentMonth ? (isSelected ? 'text-orange-700' : 'text-gray-750') : 'text-gray-400'}`}>
+                    <div className="flex justify-between items-center pb-0.5 sm:pb-1">
+                      <span className={`text-[10px] sm:text-xs font-extrabold ${isCurrentMonth ? (isSelected ? 'text-orange-700' : 'text-gray-750') : 'text-gray-400'}`}>
                         {day}
                       </span>
                       {bookingCount > 0 && (
-                        <span className="bg-white/95 border border-gray-200/50 text-gray-500 text-[8px] sm:text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-2xs leading-none">
+                        <span className="bg-white/95 border border-gray-200/50 text-gray-500 text-[7px] sm:text-[9px] font-extrabold px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded-full shadow-2xs leading-none">
                           {bookingCount}
                         </span>
                       )}
                     </div>
 
-                    {/* Booking list slots inside the day cell */}
-                    <div className={`space-y-1 mt-0.5 flex-grow overflow-y-auto scrollbar-none select-none ${viewMode === 'week' ? 'max-h-[105px] sm:max-h-[125px]' : 'max-h-[44px] sm:max-h-[48px]'}`}>
+                    {/* Mobile Only: Beautiful high-contrast micro-labels with actual Camera Rental Codes */}
+                    <div className="flex md:hidden flex-col gap-0.5 mt-1 select-none w-full max-w-full overflow-hidden">
+                      {bookings.slice(0, 2).map((b, idx) => {
+                        const colors = getCameraColorProps(b.cameraShort);
+                        return (
+                          <div
+                            key={idx}
+                            className={`px-1 py-0.5 rounded-[3px] text-[7.5px] font-black tracking-tighter leading-none border-l-[2px] ${colors.border} ${colors.bgClass} flex items-center justify-between truncate w-full shadow-4xs`}
+                            title={`${b.cameraName}`}
+                          >
+                            <span className="truncate pr-0.5">{b.cameraShort}</span>
+                            {b.contract.is6Hours && (
+                              <span className="text-[6.5px] opacity-75 shrink-0">6h</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {bookingCount > 2 && (
+                        <div className="text-[7px] font-extrabold text-orange-700 bg-orange-50/80 border border-orange-100 rounded-[2px] py-px text-center leading-none mt-0.5 font-sans shrink-0">
+                          +{bookingCount - 2} máy
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Desktop View: Booking item text blocks inside the day cell list */}
+                    <div className={`hidden md:block space-y-1 mt-0.5 flex-grow overflow-y-auto scrollbar-none select-none ${viewMode === 'week' ? 'max-h-[105px] sm:max-h-[125px]' : 'max-h-[44px] sm:max-h-[48px]'}`}>
                       {bookings.map((b, idx) => {
                         const colors = getCameraColorProps(b.cameraShort);
                         return (
                           <div
                             key={idx}
-                            className={`shadow-4xs group flex items-center justify-between px-1 sm:px-1.5 py-0.5 border-l-[2px] sm:border-l-[3px] ${colors.border} ${colors.bgClass} rounded-[4px] text-[9px] sm:text-[10px] font-extrabold tracking-tight leading-normal truncate max-w-full transition-all`}
+                            className={`shadow-4xs group flex items-center justify-between px-1.5 py-0.5 border-l-[3px] ${colors.border} ${colors.bgClass} rounded-[4px] text-[10px] font-extrabold tracking-tight leading-normal truncate max-w-full transition-all`}
                             title={`${b.cameraName} (${b.contract.is6Hours ? `Lịch thuê 6 tiếng (Trả: ${b.contract.returnTime || '18:00'})` : b.timeString}) - ${b.contract.customerName}`}
                           >
-                            <span className="truncate w-full text-[9px] sm:text-[10px]">
-                              {b.cameraShort} <span className="opacity-90 font-bold text-[8px] sm:text-[9px]">({b.contract.is6Hours ? `6h` : b.timeString === '00:00-00:00' ? 'cả ngày' : b.timeString})</span>
+                            <span className="truncate w-full text-[10px]">
+                              {b.cameraShort} <span className="opacity-90 font-bold text-[9px]">({b.contract.is6Hours ? `6h` : b.timeString === '00:00-00:00' ? 'cả ngày' : b.timeString})</span>
                             </span>
                           </div>
                         );
@@ -623,23 +682,105 @@ export default function BookingCalendar({
         </div>
 
         {/* Legend Panel at Bottom */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-5 text-[11px] sm:text-xs text-gray-550 border-t border-gray-100 pt-4 select-none">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-[10.5px] sm:text-xs text-gray-550 border-t border-gray-100 pt-3.5 select-none">
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-4 h-3 rounded border border-emerald-200 bg-emerald-50/70 inline-block"></span>
+            <span className="w-3.5 h-2.5 rounded border border-emerald-200 bg-emerald-50/70 inline-block"></span>
             <span>Trống</span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-4 h-3 rounded border border-amber-200 bg-amber-50/80 inline-block"></span>
+            <span className="w-3.5 h-2.5 rounded border border-amber-200 bg-amber-50/80 inline-block"></span>
             <span>Có lịch lẻ</span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-4 h-3 rounded border border-rose-200 bg-rose-50 inline-block"></span>
+            <span className="w-3.5 h-2.5 rounded border border-rose-200 bg-rose-50 inline-block"></span>
             <span>Kín lịch</span>
           </div>
-          <div className="sm:ml-auto text-gray-450 font-mono text-[10px] sm:text-[11px] mt-1 sm:mt-0 bg-orange-50/40 hover:bg-orange-50/70 px-2.5 py-1 rounded-lg border border-orange-100 transition-all flex items-center gap-1 border-dashed">
-            <span>Ngày đang chọn:</span> <span className="text-orange-600 font-black">{selectedDate}</span>
+          <div className="sm:ml-auto text-gray-450 font-mono text-[9px] sm:text-[11px] mt-1 sm:mt-0 bg-orange-50/40 hover:bg-orange-50/70 px-2.5 py-0.5 sm:py-1 rounded-md border border-orange-100 transition-all flex items-center gap-1 border-dashed">
+            <span>Ngày đang chọn:</span> <span className="text-orange-600 font-extrabold">{selectedDate}</span>
           </div>
         </div>
+
+        {/* Mobile-Only Interactive Daily Agenda List */}
+        {(() => {
+          const calendarDaysWithBookings = calendarDays.filter(d => (dayBookingsMap[d.dateString] || []).length > 0);
+          return (
+            <div className="block md:hidden mt-4 border-t border-gray-100 pt-4">
+              <div className="flex items-center justify-between mb-3 select-none">
+                <h3 className="text-xs font-black uppercase tracking-wider text-orange-750 flex items-center gap-1.5 font-display">
+                  <span className="w-1.5 h-3 bg-orange-600 rounded-sm"></span>
+                  Sổ biểu lịch máy thuê {viewMode === 'month' ? `tháng ${currentMonth}/${currentYear}` : 'trong tuần'}
+                </h3>
+                <span className="text-[10px] bg-orange-50 text-orange-700 font-extrabold px-2.5 py-0.5 rounded-full border border-orange-100 shadow-3xs leading-none">
+                  {calendarDaysWithBookings.length} ngày có lịch
+                </span>
+              </div>
+
+              {calendarDaysWithBookings.length > 0 ? (
+                <div className="max-h-[320px] overflow-y-auto pr-1 space-y-2.5 scrollbar-none">
+                  {calendarDaysWithBookings.map(({ dateString, day }) => {
+                    const dayBookings = dayBookingsMap[dateString] || [];
+                    const formattedDate = () => {
+                      try {
+                        const daysOfWeek = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+                        const d = new Date(dateString);
+                        return `${daysOfWeek[d.getDay()]}, Ngày ${day < 10 ? '0' + day : day}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                      } catch (e) {
+                        return `Ngày ${day} tháng ${currentMonth}`;
+                      }
+                    };
+
+                    const isSelected = selectedDate === dateString;
+
+                    return (
+                      <div
+                        key={dateString}
+                        onClick={() => handleDayClick(dateString)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-orange-50/80 border-orange-300 ring-2 ring-orange-500/10 shadow-xs'
+                            : 'bg-gray-50/65 border-gray-150 hover:bg-slate-55/10'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center mb-2 leading-none select-none">
+                          <span className="text-[11.5px] font-extrabold text-gray-800 flex items-center gap-1">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-orange-600 animate-pulse' : 'bg-gray-400'}`}></span>
+                            {formattedDate()}
+                          </span>
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-tight">
+                            {dayBookings.length} lượt thuê
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {dayBookings.map((b, bIdx) => {
+                            const colors = getCameraColorProps(b.cameraShort);
+                            return (
+                              <div
+                                key={bIdx}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-extrabold shadow-4xs ${colors.bgClass} ${colors.border}`}
+                              >
+                                <span className="font-sans font-black tracking-tight">{b.cameraShort}</span>
+                                <span className="w-1 h-1 rounded-full bg-current/30"></span>
+                                <span className="opacity-90 font-medium">
+                                  {b.contract.is6Hours ? 'Thuê 6h' : b.timeString === '00:00-00:00' ? 'Cả ngày' : b.timeString}
+                                </span>
+                                <span className="opacity-80 font-normal pr-0.5">({b.contract.customerName})</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50/30 border border-dashed border-gray-200 rounded-xl text-center select-none">
+                  <p className="text-[11px] text-gray-400 italic font-medium">Khoảng thời gian này trống lịch thuê</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Selected Day Bookings Detail Inspector */}
@@ -683,8 +824,8 @@ export default function BookingCalendar({
                         <a href={`tel:${b.contract.customerPhone}`} className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 border border-orange-100/60 rounded-lg text-[11px] text-orange-700 font-mono font-bold transition-all shrink-0">
                           <Phone className="w-3 h-3 text-orange-500 fill-orange-500/10" /> {b.contract.customerPhone}
                         </a>
-                        <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-200/50 px-1.5 py-0.5 rounded font-medium shrink-0">
-                          {b.contract.customerDocType} Cọc
+                        <span className="text-[10px] text-gray-500 bg-gray-50 border border-gray-200/50 px-1.5 py-0.5 rounded font-bold shrink-0">
+                          {b.contract.customerDocType === 'CCCD_And_1M' ? 'CCCD + 1 triệu cọc' : `${b.contract.customerDocType} cọc`}
                         </span>
                       </div>
                     </div>
@@ -823,10 +964,21 @@ export default function BookingCalendar({
                   <label className="block text-xs font-bold text-gray-700 mb-1">Giấy tờ thế chấp</label>
                   <select
                     value={formData.customerDocType}
-                    onChange={e => setFormData({ ...formData, customerDocType: e.target.value as any })}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none bg-white"
+                    onChange={e => {
+                      const val = e.target.value as any;
+                      const nextData = { ...formData, customerDocType: val };
+                      if (val === 'CCCD_And_1M') {
+                        nextData.depositAmount = 1000000;
+                        if (!formData.customerDocNote || formData.customerDocNote === 'Giữ CCCD gốc') {
+                          nextData.customerDocNote = 'Giữ CCCD gốc + 1.000.000đ';
+                        }
+                      }
+                      setFormData(nextData);
+                    }}
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none bg-white font-medium text-gray-700"
                   >
                     <option value="CCCD">Căn cước công dân (CCCD)</option>
+                    <option value="CCCD_And_1M">Giữ căn cước (CCCD) và 1 triệu đồng</option>
                     <option value="GPLX">Bằng lái xe (GPLX)</option>
                     <option value="Passport">Hộ chiếu (Passport)</option>
                     <option value="CashDeposit">Đặt cọc tiền mặt</option>
@@ -879,7 +1031,7 @@ export default function BookingCalendar({
                             {formData.is6Hours 
                               ? `${(cam.price6Hours ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.6)).toLocaleString()}đ/6h` 
                               : (calculatedDays > 0 
-                                ? `${getCameraRateForDuration(cam, calculatedDays, false).toLocaleString()}đ/ngày (${calculatedDays}n)` 
+                                ? `${Math.round(getCameraRateForDuration(cam, calculatedDays, false)).toLocaleString()}đ/ngày (${calculatedDays}n)` 
                                 : `${(cam.price1Day ?? cam.dailyRate).toLocaleString()}đ/ngày`
                               )
                             }
@@ -992,9 +1144,20 @@ export default function BookingCalendar({
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none font-mono"
                     placeholder="VD: 5000000"
                   />
+                  {calculatedRecommendedDeposit > 0 && (
+                    <div className="mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, depositAmount: calculatedRecommendedDeposit })}
+                        className="text-[10px] text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold transition-all cursor-pointer inline-block text-left"
+                      >
+                        💡 Cọc đề xuất: {calculatedRecommendedDeposit.toLocaleString()}đ
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Trả trước (Đặt cọc thuê - VND)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Cọc giữ máy trước (VND)</label>
                   <input
                     type="number"
                     value={formData.paidAmount || ''}
@@ -1002,31 +1165,35 @@ export default function BookingCalendar({
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none font-mono"
                     placeholder="VD: 500000"
                   />
-                  <div className="flex gap-1.5 mt-1.5">
+                  <div className="flex gap-2 mt-1.5">
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, paidAmount: Math.round(calculatedTotal * 0.5) })}
-                      className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold py-1 px-1 rounded-lg border border-amber-200 transition-all cursor-pointer text-center"
+                      className={`flex-1 text-[11px] font-bold py-1.5 px-2 rounded-lg border transition-all cursor-pointer text-center ${
+                        formData.paidAmount === Math.round(calculatedTotal * 0.5)
+                          ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-xs font-extrabold'
+                          : 'bg-amber-50/50 hover:bg-amber-100/70 text-amber-800 border-amber-200'
+                      }`}
                       title="Thu trước 50% tiền thuê"
                     >
                       Cọc 50% ({(Math.round(calculatedTotal * 0.5)).toLocaleString()}đ)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, paidAmount: calculatedTotal })}
-                      className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold py-1 px-1 rounded-lg border border-emerald-200 transition-all cursor-pointer text-center"
-                      title="Thu trước 100% tiền thuê"
-                    >
-                      Cọc 100% ({calculatedTotal.toLocaleString()}đ)
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setFormData({ ...formData, paidAmount: 0 })}
-                      className="bg-gray-50 hover:bg-gray-150 text-gray-700 text-[10px] font-bold py-1 px-2 rounded-lg border border-gray-200 transition-all cursor-pointer text-center"
+                      className={`flex-1 text-[11px] font-bold py-1.5 px-2 rounded-lg border transition-all cursor-pointer text-center ${
+                        formData.paidAmount === 0
+                          ? 'bg-gray-200 border-gray-400 text-gray-800 shadow-xs font-extrabold'
+                          : 'bg-gray-50 hover:bg-gray-150 text-gray-700 border-gray-200'
+                      }`}
+                      title="Không thu cọc giữ máy"
                     >
-                      0đ
+                      Không cọc (0đ)
                     </button>
                   </div>
+                  <span className="text-[10px] text-orange-600 font-medium block mt-2 bg-orange-50/50 border border-orange-100/50 p-1.5 rounded-lg leading-relaxed">
+                    💡 <b>Quy định:</b> Đặt lịch cọc trước 50% tiền thuê, hoặc chọn Không cọc nếu khách quen thanh toán khi trả máy.
+                  </span>
                 </div>
               </div>
 

@@ -8,29 +8,8 @@ import {
   INITIAL_CONTRACTS,
   INITIAL_EXPENSES
 } from './utils/mockData';
-import {
-  fetchCameras,
-  fetchContracts,
-  fetchCustomers,
-  fetchExpenses,
-  upsertCamera,
-  upsertCameras,
-  upsertContract,
-  upsertContracts,
-  upsertCustomer,
-  upsertCustomers,
-  upsertExpense,
-  upsertExpenses,
-  deleteCamera,
-  deleteContract,
-  deleteCustomer,
-  deleteExpense,
-  loadSetting,
-  saveSetting,
-  seedSettingsFromLocal,
-  syncLocalDataToSupabase,
-} from './lib/db';
-import { isSupabaseConfigured } from './lib/supabase';
+import { isSupabaseConfigured, syncToSupabase, fetchFromSupabase } from './utils/supabase.ts';
+
 
 // Component imports
 import BookingCalendar from './components/BookingCalendar';
@@ -82,7 +61,7 @@ import {
 } from 'lucide-react';
 
 const DEFAULT_USERS = [
-  { id: '1', username: 'admin', password: 'password', fullName: 'Quản trị viên', role: 'admin', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces' },
+  { id: '1', username: 'admin', password: '12345', fullName: 'Quản trị viên', role: 'admin', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces' },
   { id: '2', username: 'nhanvien', password: '123', fullName: 'Kỹ thuật viên', role: 'staff', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=faces' }
 ];
 
@@ -103,9 +82,23 @@ const PRESET_AVATARS = [
 
 export default function App() {
   // Authentication & Users State
-  const [registeredUsers, setRegisteredUsers] = useState(() =>
-    loadStoredData('registeredUsers', DEFAULT_USERS)
-  );
+  const [registeredUsers, setRegisteredUsers] = useState(() => {
+    const loaded = loadStoredData('registeredUsers', DEFAULT_USERS);
+    // Ensure admin user exists with 'admin' role and has password '12345' or handles both
+    const hasAdmin = loaded.some((u: any) => u.username.toLowerCase() === 'admin');
+    if (!hasAdmin) {
+      return [
+        { id: '1', username: 'admin', password: '12345', fullName: 'Quản trị viên', role: 'admin', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces' },
+        ...loaded
+      ];
+    } else {
+      return loaded.map((u: any) => 
+        u.username.toLowerCase() === 'admin' 
+          ? { ...u, role: 'admin', password: u.password === 'password' ? '12345' : u.password } 
+          : u
+      );
+    }
+  });
   const [currentUser, setCurrentUser] = useState(() =>
     loadStoredData('currentUser', null)
   );
@@ -127,6 +120,7 @@ export default function App() {
 
   // Dropdown / Modal Controls for Profile & Account Administration
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [sidebarDropdownOpen, setSidebarDropdownOpen] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showManageUsersModal, setShowManageUsersModal] = useState(false);
   const [showChangeAvatarModal, setShowChangeAvatarModal] = useState(false);
@@ -160,14 +154,41 @@ export default function App() {
   const [changePasswordError, setChangePasswordError] = useState('');
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
 
-  // Loading state cho Supabase fetch ban đầu
-  const [dbLoading, setDbLoading] = useState<boolean>(true);
-
-  // Load states — sẽ được populate bởi useEffect async bên dưới
-  const [cameras, setCameras] = useState<Camera[]>([]);
-  const [contracts, setContracts] = useState<RentalContract[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  // Load states from localStorage or use rich mock dataset
+  const [cameras, setCameras] = useState<Camera[]>(() =>
+    loadStoredData('cameras', INITIAL_CAMERAS)
+  );
+  const [contracts, setContracts] = useState<RentalContract[]>(() => {
+    const loaded = loadStoredData('contracts', INITIAL_CONTRACTS);
+    const migrationKey = 'camlease_historical_contracts_migrated_v1';
+    if (!localStorage.getItem(migrationKey)) {
+      localStorage.setItem(migrationKey, 'true');
+      const missingMockContracts = INITIAL_CONTRACTS.filter(
+        item => item.id.startsWith('mock-con-') && !loaded.some(loadedItem => loadedItem.id === item.id)
+      );
+      if (missingMockContracts.length > 0) {
+        return [...loaded, ...missingMockContracts];
+      }
+    }
+    return loaded;
+  });
+  const [customers, setCustomers] = useState<Customer[]>(() =>
+    loadStoredData('customers', INITIAL_CUSTOMERS)
+  );
+  const [expenses, setExpenses] = useState<Expense[]>(() => {
+    const loaded = loadStoredData('expenses', INITIAL_EXPENSES);
+    const migrationKey = 'camlease_historical_expenses_migrated_v1';
+    if (!localStorage.getItem(migrationKey)) {
+      localStorage.setItem(migrationKey, 'true');
+      const missingMockExpenses = INITIAL_EXPENSES.filter(
+        item => item.id.startsWith('mock-exp-') && !loaded.some(loadedItem => loadedItem.id === item.id)
+      );
+      if (missingMockExpenses.length > 0) {
+        return [...loaded, ...missingMockExpenses];
+      }
+    }
+    return loaded;
+  });
 
   // Active view tab state (default to 'calendar' as shown in screenshot)
   const [activeTab, setActiveTab] = useState<'calendar' | 'contracts' | 'equipment' | 'revenue' | 'customers' | 'expenses'>('calendar');
@@ -186,10 +207,10 @@ export default function App() {
 
   // Logo & Branding customization states
   const [logoText, setLogoText] = useState<string>(() =>
-    loadStoredData('logoText', 'CAMLEASE')
+    loadStoredData('logoText', 'TIỆM ẢNH NHÀ CAOS')
   );
   const [logoSubtitle, setLogoSubtitle] = useState<string>(() =>
-    loadStoredData('logoSubtitle', 'SYSTEM v1.0')
+    loadStoredData('logoSubtitle', 'CHO THUÊ MÁY ẢNH GIÁ RẺ')
   );
   const [logoIconType, setLogoIconType] = useState<'camera' | 'aperture' | 'film' | 'sparkles' | 'smile' | 'image' | 'upload'>(() =>
     loadStoredData('logoIconType', 'camera')
@@ -202,254 +223,148 @@ export default function App() {
   );
   const [showLogoModal, setShowLogoModal] = useState<boolean>(false);
 
-  // System date — defaults to actual current date (not hardcoded)
+  // simulated system date for operations & notifications
   const [systemDate, setSystemDate] = useState<string>(() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  });
-  const [isDateSimulated, setIsDateSimulated] = useState<boolean>(false);
-
-  const handleUpdateSystemDate = (newDate: string) => {
-    setSystemDate(newDate);
-    setIsDateSimulated(true);
-  };
-
-  const handleResetSystemDate = () => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    setSystemDate(`${yyyy}-${mm}-${dd}`);
-    setIsDateSimulated(false);
-  };
-
-  // Realtime clock state — updates every second
-  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
-
-  // Currently focused date — defaults to systemDate, updates to nearest booking once contracts load
-  const [selectedDate, setSelectedDate] = useState<string>(systemDate);
-
-  // Trạng thái kết nối Supabase trực quan
-  const [dbStatus, setDbStatus] = useState<{
-    type: 'connected' | 'offline' | 'error';
-    message?: string;
-  }>(() => {
-    if (!isSupabaseConfigured()) {
-      return { type: 'offline', message: 'Chưa cấu hình biến môi trường Supabase.' };
-    }
-    return { type: 'offline', message: 'Đang kết nối...' };
+    const todayStr = new Date().toLocaleDateString('sv'); // Format YYYY-MM-DD
+    return loadStoredData('systemDate', todayStr);
   });
 
-  // ── Fetch dữ liệu ban đầu từ Supabase (hoặc localStorage fallback) ──────────
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAll() {
-      setDbLoading(true);
-      
-      if (!isSupabaseConfigured()) {
-        if (!cancelled) {
-          setDbStatus({
-            type: 'offline',
-            message: 'Chưa cấu hình Supabase. Ứng dụng chạy offline dùng LocalStorage.'
-          });
-          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));
-          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));
-          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));
-          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));
-          setDbLoading(false);
-        }
-        return;
-      }
-
-      try {
-        // Kiểm tra kết nối cơ sở dữ liệu thực tế bằng cách query nhanh bảng cameras
-        // Điều này đảm bảo Supabase đã chạy SQL Editor tạo bảng
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-        const cleanUrl = supabaseUrl.endsWith('/') ? supabaseUrl.slice(0, -1) : supabaseUrl;
-        const { error: testError } = await fetch(`${cleanUrl}/rest/v1/cameras?select=id&limit=1`, {
-          headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY as string}`
-          }
-        }).then(res => res.json().then(data => {
-          if (res.status >= 400) return { error: data };
-          return { error: null };
-        })).catch(err => ({ error: err }));
-
-        if (testError) {
-          const errMsg = testError.message || testError.hint || JSON.stringify(testError);
-          throw new Error(errMsg);
-        }
-
-        // Migrate settings từ localStorage lên Supabase lần đầu (không ghi đè nếu đã có)
-        await seedSettingsFromLocal([
-          'logoText', 'logoSubtitle', 'logoIconType', 'logoIconColor', 'logoBase64', 'registeredUsers'
-        ]);
-        // Đồng bộ dữ liệu nghiệp vụ (cameras, contracts, customers, expenses) từ local lên cloud
-        await syncLocalDataToSupabase();
-
-        const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, rUsers] = await Promise.all([
-          fetchCameras(),
-          fetchContracts(),
-          fetchCustomers(),
-          fetchExpenses(),
-          loadSetting('logoText', 'CAMLEASE'),
-          loadSetting('logoSubtitle', 'SYSTEM v1.0'),
-          loadSetting('logoIconType', 'camera'),
-          loadSetting('logoIconColor', '#ea580c'),
-          loadSetting('logoBase64', ''),
-          loadSetting('registeredUsers', DEFAULT_USERS),
-        ]);
-        if (!cancelled) {
-          setCameras(cams);
-          setContracts(cons);
-          setCustomers(custs);
-          setExpenses(exps);
-          setLogoText(lText);
-          setLogoSubtitle(lSub);
-          setLogoIconType(lIcon as any);
-          setLogoIconColor(lColor);
-          setLogoBase64(lBase);
-          setRegisteredUsers(rUsers);
-
-          // Đồng bộ thông tin currentUser từ danh sách registeredUsers mới nhất
-          if (currentUser) {
-            const freshUser = rUsers.find(u => u.id === currentUser.id);
-            if (freshUser) {
-              setCurrentUser(freshUser);
-            }
-          }
-
-          setDbStatus({
-            type: 'connected',
-            message: 'Đồng bộ Supabase thành công!'
-          });
-        }
-      } catch (err: any) {
-        console.error('[App] loadAll error:', err);
-        if (!cancelled) {
-          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));
-          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));
-          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));
-          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));
-          
-          let friendlyMsg = err?.message || 'Lỗi không xác định';
-          if (friendlyMsg.includes('relation') && friendlyMsg.includes('does not exist')) {
-            friendlyMsg = 'Bảng cameras chưa được tạo. Hãy chạy file SQL schema trong SQL Editor của Supabase.';
-          } else if (friendlyMsg.includes('Failed to fetch')) {
-            friendlyMsg = 'Không thể kết nối Internet hoặc URL dự án Supabase không hợp lệ.';
-          } else if (friendlyMsg.includes('Invalid API key') || friendlyMsg.includes('JWT')) {
-            friendlyMsg = 'Mã Anon Key của Supabase không hợp lệ hoặc hết hạn.';
-          }
-
-          setDbStatus({
-            type: 'error',
-            message: `Lỗi Supabase: ${friendlyMsg} (Đã chuyển về LocalStorage)`
-          });
-        }
-      } finally {
-        if (!cancelled) setDbLoading(false);
-      }
+  // Currently focused date highlights (Default to the nearest booking/schedule date relative to systemDate!)
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const loadedContracts = loadStoredData('contracts', INITIAL_CONTRACTS) as RentalContract[];
+    if (!loadedContracts || loadedContracts.length === 0) {
+      return '2026-06-17';
     }
-    loadAll();
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── Realtime clock: cập nhật mỗi giây ───────────────────────────────────────
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // ── Tự động cập nhật ngày hệ thống theo thời gian thực nếu không giả lập ───
-  useEffect(() => {
-    if (!isDateSimulated) {
-      const yyyy = currentDateTime.getFullYear();
-      const mm = String(currentDateTime.getMonth() + 1).padStart(2, '0');
-      const dd = String(currentDateTime.getDate()).padStart(2, '0');
-      const todayStr = `${yyyy}-${mm}-${dd}`;
-      if (systemDate !== todayStr) {
-        setSystemDate(todayStr);
-      }
-    }
-  }, [currentDateTime, isDateSimulated, systemDate]);
-
-  // ── Sync settings & auth về localStorage & Supabase ─────────────────────────
-  useEffect(() => {
-    if (dbLoading) return;
-    saveSetting('logoText', logoText);
-  }, [logoText, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveSetting('logoSubtitle', logoSubtitle);
-  }, [logoSubtitle, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveSetting('logoIconType', logoIconType);
-  }, [logoIconType, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveSetting('logoIconColor', logoIconColor);
-  }, [logoIconColor, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveSetting('logoBase64', logoBase64);
-  }, [logoBase64, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveSetting('registeredUsers', registeredUsers);
-  }, [registeredUsers, dbLoading]);
-
-  useEffect(() => { saveStoredData('currentUser', currentUser); }, [currentUser]);
-  useEffect(() => { saveStoredData('camlease_snapshots', snapshots); }, [snapshots]);
-
-  // Luôn đồng bộ dữ liệu nghiệp vụ về localStorage làm local cache / offline fallback
-  useEffect(() => {
-    if (dbLoading) return;
-    saveStoredData('cameras', cameras);
-  }, [cameras, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveStoredData('contracts', contracts);
-  }, [contracts, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveStoredData('customers', customers);
-  }, [customers, dbLoading]);
-
-  useEffect(() => {
-    if (dbLoading) return;
-    saveStoredData('expenses', expenses);
-  }, [expenses, dbLoading]);
-
-  // ── Cập nhật selectedDate về ngày hợp đồng gần nhất sau khi contracts load ──
-  useEffect(() => {
-    if (contracts.length === 0) return;
-    const systemTime = new Date(systemDate).getTime();
-    let closestDate = systemDate;
+    const currentSystemDate = loadStoredData('systemDate', '2026-06-17');
+    const systemTime = new Date(currentSystemDate).getTime();
+    let closestDate = currentSystemDate;
     let minDiff = Infinity;
-    contracts.forEach((c: RentalContract) => {
+
+    loadedContracts.forEach((c: RentalContract) => {
       [c.startDate, c.endDate].forEach(dStr => {
         if (!dStr) return;
         const dTime = new Date(dStr).getTime();
         if (isNaN(dTime)) return;
         const diff = Math.abs(dTime - systemTime);
-        if (diff < minDiff) { minDiff = diff; closestDate = dStr; }
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestDate = dStr;
+        }
       });
     });
-    setSelectedDate(closestDate);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contracts.length > 0 ? contracts[0]?.id : null]);
+
+    return closestDate;
+  });
+
+  // Sync data states to local storage and Supabase
+  useEffect(() => {
+    saveStoredData('cameras', cameras);
+    if (isSupabaseConfigured) {
+      syncToSupabase('cameras', cameras);
+    }
+  }, [cameras]);
+
+  useEffect(() => {
+    saveStoredData('contracts', contracts);
+    if (isSupabaseConfigured) {
+      syncToSupabase('contracts', contracts);
+    }
+  }, [contracts]);
+
+  useEffect(() => {
+    saveStoredData('customers', customers);
+    if (isSupabaseConfigured) {
+      syncToSupabase('customers', customers);
+    }
+  }, [customers]);
+
+  useEffect(() => {
+    saveStoredData('expenses', expenses);
+    if (isSupabaseConfigured) {
+      syncToSupabase('expenses', expenses);
+    }
+  }, [expenses]);
+
+  useEffect(() => {
+    saveStoredData('systemDate', systemDate);
+  }, [systemDate]);
+
+  useEffect(() => {
+    saveStoredData('logoText', logoText);
+  }, [logoText]);
+
+  useEffect(() => {
+    saveStoredData('logoSubtitle', logoSubtitle);
+  }, [logoSubtitle]);
+
+  useEffect(() => {
+    saveStoredData('logoIconType', logoIconType);
+  }, [logoIconType]);
+
+  useEffect(() => {
+    saveStoredData('logoIconColor', logoIconColor);
+  }, [logoIconColor]);
+
+  useEffect(() => {
+    saveStoredData('logoBase64', logoBase64);
+  }, [logoBase64]);
+
+  useEffect(() => {
+    saveStoredData('registeredUsers', registeredUsers);
+    if (isSupabaseConfigured) {
+      syncToSupabase('registeredUsers', registeredUsers);
+    }
+  }, [registeredUsers]);
+
+  useEffect(() => {
+    saveStoredData('currentUser', currentUser);
+  }, [currentUser]);
+
+  useEffect(() => {
+    saveStoredData('camlease_snapshots', snapshots);
+    if (isSupabaseConfigured) {
+      syncToSupabase('camlease_snapshots', snapshots);
+    }
+  }, [snapshots]);
+
+  // Load initial data block asynchronously from Supabase if configured or seed if empty
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      const loadInitialSupabaseData = async () => {
+        try {
+          const cloudCameras = await fetchFromSupabase('cameras');
+          const cloudContracts = await fetchFromSupabase('contracts');
+          const cloudCustomers = await fetchFromSupabase('customers');
+          const cloudExpenses = await fetchFromSupabase('expenses');
+          const cloudUsers = await fetchFromSupabase('registeredUsers');
+          const cloudSnapshots = await fetchFromSupabase('camlease_snapshots');
+
+          if (cloudCameras) setCameras(cloudCameras);
+          if (cloudContracts) setContracts(cloudContracts);
+          if (cloudCustomers) setCustomers(cloudCustomers);
+          if (cloudExpenses) setExpenses(cloudExpenses);
+          if (cloudUsers) setRegisteredUsers(cloudUsers);
+          if (cloudSnapshots) setSnapshots(cloudSnapshots);
+
+          if (cloudCameras || cloudContracts || cloudCustomers || cloudExpenses) {
+            // Synchronized successfully, no toast notification displayed
+          } else {
+            console.log('[Supabase] Initializing store seed records on cloud');
+            await syncToSupabase('cameras', cameras);
+            await syncToSupabase('contracts', contracts);
+            await syncToSupabase('customers', customers);
+            await syncToSupabase('expenses', expenses);
+            await syncToSupabase('registeredUsers', registeredUsers);
+            await syncToSupabase('camlease_snapshots', snapshots);
+          }
+        } catch (err) {
+          console.error('[Supabase] Sync boot error, falling back locally', err);
+          addToast('Đồng bộ Supabase thất bại. Đang chạy chế độ Local Offline.', 'warning');
+        }
+      };
+      loadInitialSupabaseData();
+    }
+  }, []);
 
   // Operations: BACKUP & RESTORE
   const handleExportBackup = () => {
@@ -501,10 +416,7 @@ export default function App() {
       if (Array.isArray(parsed.customers)) setCustomers(parsed.customers);
       if (Array.isArray(parsed.expenses)) setExpenses(parsed.expenses);
       if (Array.isArray(parsed.registeredUsers)) setRegisteredUsers(parsed.registeredUsers);
-      if (parsed.systemDate) {
-        setSystemDate(parsed.systemDate);
-        setIsDateSimulated(true);
-      }
+      if (parsed.systemDate) setSystemDate(parsed.systemDate);
       if (parsed.logoText !== undefined) setLogoText(parsed.logoText);
       if (parsed.logoSubtitle !== undefined) setLogoSubtitle(parsed.logoSubtitle);
       if (parsed.logoIconType !== undefined) setLogoIconType(parsed.logoIconType);
@@ -561,10 +473,7 @@ export default function App() {
       if (Array.isArray(data.customers)) setCustomers(data.customers);
       if (Array.isArray(data.expenses)) setExpenses(data.expenses);
       if (Array.isArray(data.registeredUsers)) setRegisteredUsers(data.registeredUsers);
-      if (snap.systemDate) {
-        setSystemDate(snap.systemDate);
-        setIsDateSimulated(true);
-      }
+      if (snap.systemDate) setSystemDate(snap.systemDate);
       if (data.logoText !== undefined) setLogoText(data.logoText);
       if (data.logoSubtitle !== undefined) setLogoSubtitle(data.logoSubtitle);
       if (data.logoIconType !== undefined) setLogoIconType(data.logoIconType);
@@ -585,28 +494,24 @@ export default function App() {
   // Operations: CONTRACTS
   const handleAddContract = (newContract: RentalContract) => {
     setContracts(prev => [newContract, ...prev]);
-    upsertContract(newContract); // sync to Supabase
 
     // Automatically update camera statuses depending on starting date of contract
-    setCameras(prevCams => {
-      const updated = prevCams.map(cam => {
+    // (If contract starts today, mark cameras as Rented, but actually we maintain dynamically inside lists)
+    setCameras(prevCams =>
+      prevCams.map(cam => {
         const isRented = newContract.items.some(item => item.cameraId === cam.id);
         if (isRented && newContract.status === 'Active') {
           return { ...cam, status: 'Rented' as const };
         }
         return cam;
-      });
-      upsertCameras(updated); // sync cameras to Supabase
-      return updated;
-    });
+      })
+    );
 
     // Increment customer count or add new customer if it has been completed
     setCustomers(prevCusts => {
       const exists = prevCusts.some(
-        cust => cust.phone === newContract.customerPhone || 
-                cust.name.toLowerCase() === newContract.customerName.toLowerCase()
+        cust => cust.phone === newContract.customerPhone
       );
-      let updated: Customer[];
       if (newContract.status === 'Completed' && !exists) {
         const newCustomer: Customer = {
           id: `cust-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -621,19 +526,15 @@ export default function App() {
             ? `Hồ sơ tự động tạo từ hợp đồng thuê xong ${newContract.contractCode}. Giấy tờ: ${newContract.customerDocNote}`
             : `Hồ sơ tự động tạo từ hợp đồng thuê xong ${newContract.contractCode}.`
         };
-        updated = [...prevCusts, newCustomer];
-        upsertCustomer(newCustomer); // sync to Supabase
-      } else {
-        updated = prevCusts.map(cust => {
-          if (cust.name.toLowerCase() === newContract.customerName.toLowerCase() || cust.phone === newContract.customerPhone) {
-            const updatedCust = { ...cust, rentalCount: cust.rentalCount + 1 };
-            upsertCustomer(updatedCust);
-            return updatedCust;
-          }
-          return cust;
-        });
+        return [...prevCusts, newCustomer];
       }
-      return updated;
+
+      return prevCusts.map(cust => {
+        if (cust.phone === newContract.customerPhone) {
+          return { ...cust, rentalCount: cust.rentalCount + 1 };
+        }
+        return cust;
+      });
     });
 
     addToast(
@@ -667,13 +568,12 @@ export default function App() {
       if (c) {
         setCustomers(prevCusts => {
           const exists = prevCusts.some(
-            cust => cust.phone === c.customerPhone || 
-                    cust.name.toLowerCase() === c.customerName.toLowerCase()
+            cust => cust.phone === c.customerPhone
           );
           if (!exists) {
+            // Count contracts for this customer
             const customerContractsCount = contracts.filter(
-              ct => ct.customerPhone === c.customerPhone || 
-                    ct.customerName.toLowerCase() === c.customerName.toLowerCase()
+              ct => ct.customerPhone === c.customerPhone
             ).length;
 
             const newCustomer: Customer = {
@@ -689,7 +589,6 @@ export default function App() {
                 ? `Hồ sơ tự động tạo từ hợp đồng thuê xong ${c.contractCode}. Giấy tờ: ${c.customerDocNote}`
                 : `Hồ sơ tự động tạo từ hợp đồng thuê xong ${c.contractCode}.`
             };
-            upsertCustomer(newCustomer); // sync to Supabase
             return [...prevCusts, newCustomer];
           }
           return prevCusts;
@@ -700,40 +599,49 @@ export default function App() {
     setContracts(prev =>
       prev.map(c => {
         if (c.id === id) {
+          let finalNote = note ? `${c.note || ''}\n[Trạng thái]: ${note}` : c.note;
+          let finalPaidAmount = c.paidAmount;
+
+          if (status === 'Active') {
+            const extra = c.totalPrice - c.paidAmount;
+            if (extra > 0) {
+              finalNote = `${finalNote || ''}\n[Hệ thống]: Khách nhận máy, thanh toán nốt ${extra.toLocaleString()}đ còn lại (Đặc tả 50% còn lại).`;
+              finalPaidAmount = c.totalPrice;
+            } else {
+              finalPaidAmount = c.totalPrice;
+            }
+          } else if (paidAmount !== undefined) {
+            finalPaidAmount = paidAmount;
+          }
+
           const updatedContract = {
             ...c,
             status,
-            note: note ? `${c.note || ''}\n[Cập nhật]: ${note}` : c.note,
-            paidAmount: paidAmount !== undefined ? paidAmount : c.paidAmount
+            note: finalNote,
+            paidAmount: finalPaidAmount
           };
-
-          upsertContract(updatedContract); // sync to Supabase
 
           // Adjust camera statuses based on contract transition
           if (status === 'Completed' || status === 'Cancelled') {
-            setCameras(prevCams => {
-              const updated = prevCams.map(cam => {
+            setCameras(prevCams =>
+              prevCams.map(cam => {
                 const wasRented = c.items.some(i => i.cameraId === cam.id);
                 if (wasRented) {
                   return { ...cam, status: 'Available' as const };
                 }
                 return cam;
-              });
-              upsertCameras(updated);
-              return updated;
-            });
+              })
+            );
           } else if (status === 'Active') {
-            setCameras(prevCams => {
-              const updated = prevCams.map(cam => {
+            setCameras(prevCams =>
+              prevCams.map(cam => {
                 const isRented = c.items.some(i => i.cameraId === cam.id);
                 if (isRented) {
                   return { ...cam, status: 'Rented' as const };
                 }
                 return cam;
-              });
-              upsertCameras(updated);
-              return updated;
-            });
+              })
+            );
           }
 
           return updatedContract;
@@ -747,9 +655,7 @@ export default function App() {
     setContracts(prev =>
       prev.map(c => {
         if (c.id === id) {
-          const updated = { ...c, note };
-          upsertContract(updated); // sync to Supabase
-          return updated;
+          return { ...c, note };
         }
         return c;
       })
@@ -760,15 +666,16 @@ export default function App() {
     const contractToDelete = contracts.find(c => c.id === id);
     if (!contractToDelete) return;
 
+    // Remove the contract from the list
     const updatedContracts = contracts.filter(c => c.id !== id);
     setContracts(updatedContracts);
-    deleteContract(id); // sync to Supabase
 
     // Adjust camera statuses based on remaining Active and Overdue contracts
-    setCameras(prevCams => {
-      const updated = prevCams.map(cam => {
+    setCameras(prevCams =>
+      prevCams.map(cam => {
         const wasRented = contractToDelete.items.some(i => i.cameraId === cam.id);
         if (wasRented) {
+          // See if any of the remaining contracts keep this camera rented
           const isStillRented = updatedContracts.some(
             c => (c.status === 'Active' || c.status === 'Overdue') && c.items.some(i => i.cameraId === cam.id)
           );
@@ -777,21 +684,14 @@ export default function App() {
           }
         }
         return cam;
-      });
-      upsertCameras(updated);
-      return updated;
-    });
+      })
+    );
 
     // Decrement customer's rental count
     setCustomers(prevCusts =>
       prevCusts.map(cust => {
-        if (
-          cust.name.toLowerCase() === contractToDelete.customerName.toLowerCase() ||
-          cust.phone === contractToDelete.customerPhone
-        ) {
-          const updated = { ...cust, rentalCount: Math.max(0, cust.rentalCount - 1) };
-          upsertCustomer(updated);
-          return updated;
+        if (cust.phone === contractToDelete.customerPhone) {
+          return { ...cust, rentalCount: Math.max(0, cust.rentalCount - 1) };
         }
         return cust;
       })
@@ -801,44 +701,36 @@ export default function App() {
   // Operations: CAMERAS
   const handleAddCamera = (newCam: Camera) => {
     setCameras(prev => [...prev, newCam]);
-    upsertCamera(newCam); // sync to Supabase
   };
 
   const handleUpdateCamera = (updatedCam: Camera) => {
     setCameras(prev => prev.map(c => (c.id === updatedCam.id ? updatedCam : c)));
-    upsertCamera(updatedCam); // sync to Supabase
   };
 
   const handleDeleteCamera = (id: string) => {
     setCameras(prev => prev.filter(c => c.id !== id));
-    deleteCamera(id); // sync to Supabase
   };
 
   // Operations: CUSTOMERS
   const handleAddCustomer = (newCust: Customer) => {
     setCustomers(prev => [...prev, newCust]);
-    upsertCustomer(newCust); // sync to Supabase
   };
 
   const handleUpdateCustomer = (updatedCust: Customer) => {
     setCustomers(prev => prev.map(c => (c.id === updatedCust.id ? updatedCust : c)));
-    upsertCustomer(updatedCust); // sync to Supabase
   };
 
   const handleDeleteCustomer = (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
-    deleteCustomer(id); // sync to Supabase
   };
 
   // Operations: EXPENSES
   const handleAddExpense = (newExp: Expense) => {
     setExpenses(prev => [newExp, ...prev]);
-    upsertExpense(newExp); // sync to Supabase
   };
 
   const handleDeleteExpense = (id: string) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
-    deleteExpense(id); // sync to Supabase
   };
 
   // Operations: AUTHENTICATION
@@ -908,10 +800,12 @@ export default function App() {
     setLoginError('');
     const username = usernameInput.trim().toLowerCase();
     const foundUser = registeredUsers.find(
-      u => u.username.toLowerCase() === username && u.password === passwordInput
+      (u: any) => u.username.toLowerCase() === username && (u.password === passwordInput || (username === 'admin' && (passwordInput === '12345' || passwordInput === 'password')))
     );
     if (foundUser) {
-      setCurrentUser(foundUser);
+      // Force admin role for username 'admin'
+      const activeUser = username === 'admin' ? { ...foundUser, role: 'admin' } : foundUser;
+      setCurrentUser(activeUser);
       setLoginError('');
       setUsernameInput('');
       setPasswordInput('');
@@ -1097,31 +991,8 @@ export default function App() {
     setStaffError('Đã xóa tài khoản thành công!');
   };
 
-  // Hiển thị màn hình loading khi đang fetch dữ liệu từ Supabase
-  if (dbLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5 select-none">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
-            <Aperture className="w-8 h-8 text-white animate-spin" style={{ animationDuration: '2s' }} />
-          </div>
-        </div>
-        <div className="text-center space-y-1.5">
-          <p className="text-white font-bold text-lg tracking-tight">{logoText || 'CAMLEASE'}</p>
-          <p className="text-slate-400 text-sm">Đang kết nối cơ sở dữ liệu...</p>
-        </div>
-        <div className="flex gap-1.5 mt-2">
-          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
-        </div>
-      </div>
-    );
-  }
-
   // If user is not authenticated, render the glorious login experience screen
   if (!currentUser) {
-
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row antialiased relative overflow-hidden select-none">
         
@@ -1132,8 +1003,8 @@ export default function App() {
         {/* Decorative Grid Overlay */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-30 pointer-events-none"></div>
 
-        {/* Left decoration panel with customizable brand colors and Unsplash setup */}
-        <div className="w-full md:w-5/12 lg:w-6/12 xl:w-7/12 bg-slate-900 text-white relative flex flex-col justify-between p-6 md:p-10 lg:p-16 border-b md:border-b-0 md:border-r border-slate-800/80">
+        {/* Left decoration panel with customizable brand colors and Unsplash setup - Hidden on Mobile */}
+        <div className="hidden md:flex md:w-5/12 lg:w-6/12 xl:w-7/12 bg-slate-900 text-white relative flex-col justify-between p-8 lg:p-16 border-r border-slate-800/80">
           <div className="absolute inset-0 opacity-20 pointer-events-none mix-blend-overlay bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-orange-400 via-rose-600 to-indigo-900"></div>
           <div 
             className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-luminosity pointer-events-none" 
@@ -1142,56 +1013,37 @@ export default function App() {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-950/10 opacity-70 pointer-events-none"></div>
 
           {/* Dynamic Top Brand section */}
-          <div className="flex items-center gap-3.5 relative z-10 bg-slate-950/30 backdrop-blur-md p-3.5 rounded-2xl border border-white/5 w-fit">
+          <div className="flex items-center gap-3.5 relative z-10 bg-slate-950/40 backdrop-blur-md p-4 rounded-3xl border border-white/10 w-fit">
             {logoIconType === 'upload' && logoBase64 ? (
-              <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 bg-white/10 flex items-center justify-center shadow-lg">
+              <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/20 bg-white/10 flex items-center justify-center shadow-xl">
                 <img src={logoBase64} alt="Custom Logo" className="w-full h-full object-cover" />
               </div>
             ) : (
               <span 
-                className="w-10 h-10 rounded-xl text-white shadow-lg flex items-center justify-center transition scale-100 hover:scale-105"
+                className="w-14 h-14 rounded-2xl text-white shadow-xl flex items-center justify-center transition scale-100 hover:scale-105 font-bold"
                 style={{ backgroundColor: logoIconColor }}
               >
-                {logoIconType === 'aperture' && <Aperture className="w-5.5 h-5.5" />}
-                {logoIconType === 'film' && <Film className="w-5.5 h-5.5" />}
-                {logoIconType === 'sparkles' && <Sparkles className="w-5.5 h-5.5 text-yellow-300" />}
-                {logoIconType === 'smile' && <Smile className="w-5.5 h-5.5" />}
-                {logoIconType === 'image' && <ImageIcon className="w-5.5 h-5.5" />}
-                {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-5.5 h-5.5" />}
+                {logoIconType === 'aperture' && <Aperture className="w-8 h-8" />}
+                {logoIconType === 'film' && <Film className="w-8 h-8" />}
+                {logoIconType === 'sparkles' && <Sparkles className="w-8 h-8 text-yellow-300" />}
+                {logoIconType === 'smile' && <Smile className="w-8 h-8" />}
+                {logoIconType === 'image' && <ImageIcon className="w-8 h-8" />}
+                {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-8 h-8" />}
               </span>
             )}
-            <div className="leading-tight pr-2">
-              <span className="font-sans font-black text-white text-base tracking-widest block uppercase">
-                {logoText || 'CAMLEASE'}
+            <div className="leading-tight pr-4">
+              <span className="font-sans font-black text-white text-lg tracking-widest block uppercase">
+                {logoText || 'TIỆM ẢNH NHÀ CAOS'}
               </span>
-              <span className="text-[9px] text-slate-400 font-mono block tracking-widest uppercase">{logoSubtitle || 'SYSTEM v1.0'}</span>
+              <span className="text-[10px] text-slate-300 font-mono block tracking-widest uppercase mt-0.5">{logoSubtitle || 'CHO THUÊ MÁY ẢNH GIÁ RẺ'}</span>
             </div>
           </div>
 
           {/* Welcome Message Text Block */}
           <div className="my-6 md:my-0 space-y-4 md:space-y-6 max-w-xl relative z-10 md:mt-auto md:mb-auto pt-4 md:pt-0">
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-bold text-orange-400 border border-orange-500/30 rounded-full bg-orange-500/10 uppercase tracking-widest leading-none">
-                <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" /> Phiên bản máy chủ đám mây bảo mật
-              </span>
-              <span 
-                className={`inline-flex items-center gap-1 px-3 py-1 text-[10px] font-bold border rounded-full uppercase tracking-widest leading-none select-none cursor-help ${
-                  dbStatus.type === 'connected' 
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                    : dbStatus.type === 'error'
-                      ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                      : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                }`}
-                title={dbStatus.message}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  dbStatus.type === 'connected' ? 'bg-emerald-400 animate-pulse' :
-                  dbStatus.type === 'error' ? 'bg-rose-400' : 'bg-amber-400'
-                }`} />
-                {dbStatus.type === 'connected' ? 'Supabase connected' :
-                 dbStatus.type === 'error' ? 'Database error' : 'Offline Mode'}
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-bold text-orange-400 border border-orange-500/30 rounded-full bg-orange-500/10 uppercase tracking-widest leading-none">
+              <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" /> Phiên bản máy chủ đám mây bảo mật
+            </span>
             <div className="space-y-3 md:space-y-4">
               <h2 className="text-2xl sm:text-3xl lg:text-5xl font-display font-black text-white tracking-tight leading-none animate-fade-in">
                 Quản lý Cho thuê <br className="hidden md:inline" /> 
@@ -1228,19 +1080,46 @@ export default function App() {
           {/* Footer of decorative block */}
           <div className="hidden sm:flex relative z-10 text-[11px] text-slate-500 select-none items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>© 2026 {logoText || 'CAMLEASE'} Enterprise Suite • Kết nối máy chủ an toàn</span>
+            <span>© 2026 {logoText || 'TIỆM ẢNH NHÀ CAOS'} Enterprise Suite • Kết nối máy chủ an toàn</span>
           </div>
         </div>
 
         {/* Right authentic login sheet form */}
-        <div className="flex-1 bg-slate-950 flex flex-col justify-center p-6 sm:p-12 lg:p-16 relative z-10">
+        <div className="flex-grow bg-slate-950 flex flex-col justify-center p-3.5 xs:p-5 sm:p-12 lg:p-16 relative z-10 min-h-screen">
           
           {/* Ambient Glow behind the card */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
           <div className="max-w-md w-full mx-auto relative z-10">
             
-            <div className="bg-slate-900 border border-slate-800 p-6 sm:p-9 rounded-2xl shadow-2xl space-y-6 transition duration-300 hover:border-slate-700/60 hover:shadow-[0_0_50px_-12px_rgba(249,115,22,0.15)]">
+            {/* Mobile-only beautiful branding logotype */}
+            <div className="flex md:hidden items-center justify-center gap-2.5 mb-7 select-none animate-fade-in">
+              {logoIconType === 'upload' && logoBase64 ? (
+                <div className="w-11 h-11 rounded-xl overflow-hidden border border-white/20 bg-slate-900 flex items-center justify-center shadow-lg shadow-orange-500/10 shrink-0">
+                  <img src={logoBase64} alt="Custom Logo" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <span 
+                  className="w-11 h-11 rounded-xl text-white shadow-lg flex items-center justify-center shadow-orange-500/10 shrink-0 font-bold"
+                  style={{ backgroundColor: logoIconColor }}
+                >
+                  {logoIconType === 'aperture' && <Aperture className="w-6.5 h-6.5" />}
+                  {logoIconType === 'film' && <Film className="w-6.5 h-6.5" />}
+                  {logoIconType === 'sparkles' && <Sparkles className="w-6.5 h-6.5 text-yellow-300" />}
+                  {logoIconType === 'smile' && <Smile className="w-6.5 h-6.5" />}
+                  {logoIconType === 'image' && <ImageIcon className="w-6.5 h-6.5" />}
+                  {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-6.5 h-6.5" />}
+                </span>
+              )}
+              <div className="leading-tight text-left">
+                <span className="font-sans font-black text-white text-base tracking-widest block uppercase">
+                  {logoText || 'TIỆM ẢNH NHÀ CAOS'}
+                </span>
+                <span className="text-[9px] text-orange-400 font-mono block tracking-widest uppercase font-bold mt-0.5">{logoSubtitle || 'CHO THUÊ MÁY ẢNH GIÁ RẺ'}</span>
+              </div>
+            </div>
+            
+            <div className="bg-slate-900/95 backdrop-blur-md border border-slate-800 p-5 xs:p-7 sm:p-9 rounded-2xl shadow-2xl space-y-4 xs:space-y-5 transition duration-300 hover:border-slate-700/60 hover:shadow-[0_0_50px_-12px_rgba(249,115,22,0.15)]">
               
               {!isRegisterMode ? (
                 // LOGIN Giao diện
@@ -1362,7 +1241,7 @@ export default function App() {
                       {/* Admin Quick button */}
                       <button
                         type="button"
-                        onClick={() => handleAutofill('admin', 'password')}
+                        onClick={() => handleAutofill('admin', '12345')}
                         className="p-2.5 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 text-left hover:bg-slate-950 hover:border-orange-500/40 hover:shadow-md transition duration-200 flex flex-col justify-between cursor-pointer group"
                       >
                         <div className="w-full flex items-center justify-between mb-1.5">
@@ -1371,7 +1250,7 @@ export default function App() {
                         </div>
                         <div className="min-w-0">
                           <span className="text-[11px] font-bold text-white block group-hover:text-orange-400 transition-colors truncate">Tài khoản Quản trị</span>
-                          <span className="text-[9px] text-slate-500 font-mono block truncate">admin / password</span>
+                          <span className="text-[9px] text-slate-500 font-mono block truncate">admin / 12345</span>
                         </div>
                       </button>
 
@@ -1694,431 +1573,576 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans select-none antialiased flex">
-
-      {/* ===== SIDEBAR (Desktop only) ===== */}
-      <aside className="hidden md:flex flex-col w-60 bg-slate-900 fixed inset-y-0 left-0 z-30 shadow-2xl">
-
-        {/* Logo / Branding - click to customize */}
-        <div
+    <div className="h-screen bg-slate-50 flex font-sans select-none antialiased w-full overflow-hidden">
+      
+      {/* PERSISTENT LEFT SIDEBAR - Visible on medium screens and up */}
+      <aside className="hidden md:flex flex-col w-20 lg:w-[280px] bg-[#0b0f19] text-white shrink-0 h-screen sticky top-0 border-r border-slate-800/40 transition-all duration-300">
+        
+        {/* Top Header Section: Tiệm ảnh Caos logo */}
+        <div 
           onClick={() => setShowLogoModal(true)}
-          className="flex items-center gap-2.5 px-4 py-3 cursor-pointer hover:bg-slate-800/60 transition-colors border-b border-slate-800/80 group select-none"
-          title="Nhấp để thay đổi Logo & Thương hiệu"
+          className="px-3 py-6 lg:px-6 border-b border-slate-800/40 flex flex-col lg:flex-row items-center justify-center lg:justify-start gap-3.5 cursor-pointer hover:bg-white/5 transition duration-300"
+          title="Thay đổi Logo & Thương hiệu"
         >
           {logoIconType === 'upload' && logoBase64 ? (
-            <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/10 shrink-0">
-              <img src={logoBase64} alt="Custom Logo" className="w-full h-full object-cover" />
+            <div className="w-14 h-14 rounded-full overflow-hidden border border-slate-800 flex items-center justify-center bg-white shrink-0 shadow-md relative">
+              <img src={logoBase64} alt="Custom Logo" className="w-full h-full object-cover animate-fade-in" />
             </div>
           ) : (
-            <span
-              className="w-7 h-7 rounded-lg text-white shrink-0 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform"
+            <span 
+              className="w-14 h-14 rounded-full text-white shrink-0 shadow-md flex items-center justify-center font-bold"
               style={{ backgroundColor: logoIconColor }}
             >
-              {logoIconType === 'aperture' && <Aperture className="w-4 h-4" />}
-              {logoIconType === 'film' && <Film className="w-4 h-4" />}
-              {logoIconType === 'sparkles' && <Sparkles className="w-4 h-4 text-yellow-300" />}
-              {logoIconType === 'smile' && <Smile className="w-4 h-4" />}
-              {logoIconType === 'image' && <ImageIcon className="w-4 h-4" />}
-              {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-4 h-4" />}
+              {logoIconType === 'aperture' && <Aperture className="w-8 h-8" />}
+              {logoIconType === 'film' && <Film className="w-8 h-8" />}
+              {logoIconType === 'sparkles' && <Sparkles className="w-8 h-8 text-yellow-300" />}
+              {logoIconType === 'smile' && <Smile className="w-8 h-8" />}
+              {logoIconType === 'image' && <ImageIcon className="w-8 h-8" />}
+              {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-8 h-8" />}
             </span>
           )}
-          <div className="leading-tight min-w-0">
-            <span className="font-black text-white text-xs tracking-widest uppercase block truncate group-hover:text-orange-400 transition-colors font-sans">
-              {logoText || 'CAMLEASE'}
+          <div className="leading-tight hidden lg:block">
+            <span className="font-display font-black text-white text-[15.5px] tracking-tight block uppercase">
+              {logoText || 'TIỆM ẢNH NHÀ CAOS'}
             </span>
-            <span className="text-[9px] text-slate-500 font-mono tracking-wider uppercase">{logoSubtitle || 'SYSTEM v1.0'}</span>
-          </div>
-        </div>
-
-
-        {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto scrollbar-none">
-          <div className="mb-2 px-3">
-            <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-[0.15em]">Menu chính</span>
-          </div>
-          <div className="space-y-0.5">
-          {([
-            { key: 'calendar' as const, icon: <Calendar className="w-4.5 h-4.5 shrink-0" />, label: 'Lịch máy', desc: 'Xem lịch đặt thiết bị', show: true },
-            { key: 'contracts' as const, icon: <FileText className="w-4.5 h-4.5 shrink-0" />, label: 'Đơn thuê', desc: 'Hợp đồng & trạng thái', show: true },
-            { key: 'equipment' as const, icon: <CameraIcon className="w-4.5 h-4.5 shrink-0" />, label: 'Thiết bị', desc: 'Kho máy & lens', show: true },
-            { key: 'customers' as const, icon: <Users className="w-4.5 h-4.5 shrink-0" />, label: 'Khách hàng', desc: 'Hồ sơ đối tác', show: true },
-            { key: 'revenue' as const, icon: <TrendingUp className="w-4.5 h-4.5 shrink-0" />, label: 'Doanh thu', desc: 'Báo cáo tài chính', show: currentUser?.role === 'admin' },
-            { key: 'expenses' as const, icon: <DollarSign className="w-4.5 h-4.5 shrink-0" />, label: 'Khoản chi', desc: 'Chi phí phát sinh', show: currentUser?.role === 'admin' },
-          ] as const).filter(item => item.show).map(item => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setActiveTab(item.key)}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-150 cursor-pointer group ${
-                activeTab === item.key
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/40'
-                  : 'text-slate-200 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <span className={`transition-colors shrink-0 ${
-                activeTab === item.key
-                  ? 'text-white'
-                  : 'text-slate-400 group-hover:text-orange-400'
-              }`}>
-                {item.icon}
-              </span>
-              <div className="min-w-0 flex-1">
-                <span className="text-xs font-bold block truncate leading-tight">{item.label}</span>
-                <span className={`text-[10px] block truncate leading-tight mt-0.5 ${
-                  activeTab === item.key ? 'text-orange-200' : 'text-slate-500 group-hover:text-slate-300'
-                }`}>{item.desc}</span>
-              </div>
-              {activeTab === item.key && <ChevronRight className="w-3.5 h-3.5 ml-auto shrink-0" />}
-            </button>
-          ))}
-          </div>
-        </nav>
-
-        {/* System status indicator */}
-        <div className="px-3 py-3 border-t border-slate-700/60">
-          <div className="px-3 py-2.5 rounded-xl bg-slate-800 border border-slate-700/60">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              <span className="text-[9px] font-extrabold text-emerald-400 uppercase tracking-widest">Hệ thống hoạt động</span>
-              {isDateSimulated && (
-                <span className="ml-auto text-[8px] font-extrabold text-orange-400 bg-orange-500/15 border border-orange-500/30 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Giả lập</span>
-              )}
-            </div>
-            <span className="text-sm font-mono font-bold text-slate-200 block">
-              {systemDate ? systemDate.split('-').reverse().join('/') : '--/--/----'}
+            <span className="text-[10px] text-slate-400 font-bold block tracking-wider uppercase mt-0.5">
+              {logoSubtitle || 'CHO THUÊ MÁY ẢNH GIÁ RẺ'}
             </span>
           </div>
         </div>
 
+        {/* Menu Title */}
+        <div className="px-6 pt-5 pb-2 text-[11px] font-black uppercase tracking-widest text-slate-500 hidden lg:block">
+          Menu chính
+        </div>
+        <div className="pt-2 pb-1 border-b border-slate-800/25 md:block lg:hidden"></div>
 
-        {/* User Profile at Sidebar Bottom */}
-        <div className="p-3 border-t border-slate-700/60 relative">
+        {/* Sidebar Nav Items */}
+        <nav className="flex-1 px-2.5 lg:px-4 space-y-2 lg:space-y-1.5 overflow-y-auto scrollbar-none py-3">
+          
+          {/* Calendar (Lịch máy) */}
           <button
             type="button"
-            onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer group border border-transparent hover:border-slate-700/60"
+            onClick={() => setActiveTab('calendar')}
+            className={`w-full rounded-xl transition-all flex flex-col lg:flex-row items-center justify-center lg:justify-between p-2 lg:p-3.5 cursor-pointer min-h-[52px] lg:min-h-0 ${
+              activeTab === 'calendar'
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
+            }`}
           >
-            <div className="w-9 h-9 rounded-xl overflow-hidden border-2 border-orange-500/40 shrink-0 shadow-md">
-              <img
-                src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'}
-                alt="Avatar"
-                className="w-full h-full object-cover"
-              />
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
+              <Calendar className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${activeTab === 'calendar' ? 'text-white' : 'text-slate-400'}`} />
+              <div className="leading-tight hidden lg:block text-left">
+                <span className="block text-[13.5px] font-extrabold tracking-tight">Lịch máy</span>
+                <span className={`text-[11px] block mt-0.5 ${activeTab === 'calendar' ? 'text-orange-100 font-medium' : 'text-slate-500'}`}>Xem lịch đặt thiết bị</span>
+              </div>
+              <span className="text-[9.5px] font-bold block lg:hidden uppercase tracking-tight scale-90 whitespace-nowrap opacity-80">Lịch</span>
             </div>
-            <div className="flex-1 min-w-0 text-left">
-              <span className="text-sm font-bold text-white block truncate">{currentUser?.fullName}</span>
-              <span className={`text-[10px] font-extrabold uppercase tracking-widest font-mono ${
-                currentUser?.role === 'admin' ? 'text-orange-400' : 'text-slate-400'
-              }`}>
-                {currentUser?.role === 'admin' ? 'Admin' : 'Staff'}
-              </span>
-            </div>
-            <Settings className="w-4 h-4 text-slate-500 group-hover:text-slate-200 transition-colors shrink-0 group-hover:rotate-45 duration-300" />
+            {activeTab === 'calendar' && <ChevronRight className="w-4.5 h-4.5 text-white hidden lg:block" />}
           </button>
 
-          {/* Profile Dropdown - opens upward */}
-          {profileDropdownOpen && (
+          {/* Contracts (Đơn thuê) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('contracts')}
+            className={`w-full rounded-xl transition-all flex flex-col lg:flex-row items-center justify-center lg:justify-between p-2 lg:p-3.5 cursor-pointer min-h-[52px] lg:min-h-0 ${
+              activeTab === 'contracts'
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
+            }`}
+          >
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
+              <FileText className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${activeTab === 'contracts' ? 'text-white' : 'text-slate-400'}`} />
+              <div className="leading-tight hidden lg:block text-left">
+                <span className="block text-[13.5px] font-extrabold tracking-tight">Đơn thuê</span>
+                <span className={`text-[11px] block mt-0.5 ${activeTab === 'contracts' ? 'text-orange-100 font-medium' : 'text-slate-500'}`}>Hợp đồng & trạng thái</span>
+              </div>
+              <span className="text-[9.5px] font-bold block lg:hidden uppercase tracking-tight scale-90 whitespace-nowrap opacity-80">Đơn</span>
+            </div>
+            {activeTab === 'contracts' && <ChevronRight className="w-4.5 h-4.5 text-white hidden lg:block" />}
+          </button>
+
+          {/* Equipment (Thiết bị) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('equipment')}
+            className={`w-full rounded-xl transition-all flex flex-col lg:flex-row items-center justify-center lg:justify-between p-2 lg:p-3.5 cursor-pointer min-h-[52px] lg:min-h-0 ${
+              activeTab === 'equipment'
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
+            }`}
+          >
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
+              <CameraIcon className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${activeTab === 'equipment' ? 'text-white' : 'text-slate-400'}`} />
+              <div className="leading-tight hidden lg:block text-left">
+                <span className="block text-[13.5px] font-extrabold tracking-tight">Thiết bị</span>
+                <span className={`text-[11px] block mt-0.5 ${activeTab === 'equipment' ? 'text-orange-100 font-medium' : 'text-slate-500'}`}>Kho máy & lens</span>
+              </div>
+              <span className="text-[9.5px] font-bold block lg:hidden uppercase tracking-tight scale-90 whitespace-nowrap opacity-80">Thiết bị</span>
+            </div>
+            {activeTab === 'equipment' && <ChevronRight className="w-4.5 h-4.5 text-white hidden lg:block" />}
+          </button>
+
+          {/* Customers (Khách hàng) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('customers')}
+            className={`w-full rounded-xl transition-all flex flex-col lg:flex-row items-center justify-center lg:justify-between p-2 lg:p-3.5 cursor-pointer min-h-[52px] lg:min-h-0 ${
+              activeTab === 'customers'
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
+            }`}
+          >
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
+              <Users className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${activeTab === 'customers' ? 'text-white' : 'text-slate-400'}`} />
+              <div className="leading-tight hidden lg:block text-left">
+                <span className="block text-[13.5px] font-extrabold tracking-tight">Khách hàng</span>
+                <span className={`text-[11px] block mt-0.5 ${activeTab === 'customers' ? 'text-orange-100 font-medium' : 'text-slate-500'}`}>Hồ sơ đối tác</span>
+              </div>
+              <span className="text-[9.5px] font-bold block lg:hidden uppercase tracking-tight scale-90 whitespace-nowrap opacity-80">Khách</span>
+            </div>
+            {activeTab === 'customers' && <ChevronRight className="w-4.5 h-4.5 text-white hidden lg:block" />}
+          </button>
+
+          {/* Revenue (Doanh thu) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('revenue')}
+            className={`w-full rounded-xl transition-all flex flex-col lg:flex-row items-center justify-center lg:justify-between p-2 lg:p-3.5 cursor-pointer min-h-[52px] lg:min-h-0 ${
+              activeTab === 'revenue'
+                ? 'bg-orange-600 text-white shadow-md font-semibold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
+            }`}
+          >
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
+              <TrendingUp className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${activeTab === 'revenue' ? 'text-white' : 'text-slate-400'}`} />
+              <div className="leading-tight hidden lg:block text-left">
+                <span className="block text-[13.5px] font-extrabold tracking-tight">Doanh thu</span>
+                <span className={`text-[11px] block mt-0.5 ${activeTab === 'revenue' ? 'text-orange-100 font-medium' : 'text-slate-500'}`}>Báo cáo tài chính</span>
+              </div>
+              <span className="text-[9.5px] font-bold block lg:hidden uppercase tracking-tight scale-90 whitespace-nowrap opacity-80">D.Thu</span>
+            </div>
+            {activeTab === 'revenue' && <ChevronRight className="w-4.5 h-4.5 text-white hidden lg:block" />}
+          </button>
+
+          {/* Expenses (Khoản chi) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('expenses')}
+            className={`w-full rounded-xl transition-all flex flex-col lg:flex-row items-center justify-center lg:justify-between p-2 lg:p-3.5 cursor-pointer min-h-[52px] lg:min-h-0 ${
+              activeTab === 'expenses'
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
+            }`}
+          >
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
+              <DollarSign className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${activeTab === 'expenses' ? 'text-white' : 'text-slate-400'}`} />
+              <div className="leading-tight hidden lg:block text-left">
+                <span className="block text-[13.5px] font-extrabold tracking-tight">Khoản chi</span>
+                <span className={`text-[11px] block mt-0.5 ${activeTab === 'expenses' ? 'text-orange-100 font-medium' : 'text-slate-500'}`}>Chi phí phát sinh</span>
+              </div>
+              <span className="text-[9.5px] font-bold block lg:hidden uppercase tracking-tight scale-90 whitespace-nowrap opacity-80">Chi</span>
+            </div>
+            {activeTab === 'expenses' && <ChevronRight className="w-4.5 h-4.5 text-white hidden lg:block" />}
+          </button>
+
+        </nav>
+
+        {/* System Date Box */}
+        <div className="mx-4 mb-4 bg-slate-900 border border-slate-800/80 p-3.5 rounded-xl select-none hidden lg:block">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="w-2 h-2 rounded-full inline-block shrink-0 bg-orange-500"></span>
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-orange-400">
+              Ngày hệ thống
+            </span>
+          </div>
+          <div className="text-sm font-black font-mono text-white mt-1 pointer-events-none">
+            <span>{systemDate}</span>
+          </div>
+        </div>
+
+        {/* Bottom User Profile Section */}
+        <div className="relative p-3 lg:p-4 border-t border-slate-800/50 flex flex-col lg:flex-row items-center justify-center lg:justify-between gap-2.5 bg-slate-950/40">
+          <div 
+            onClick={() => setSidebarDropdownOpen(!sidebarDropdownOpen)}
+            className="flex flex-col lg:flex-row items-center gap-2 lg:gap-2.5 min-w-0 cursor-pointer hover:opacity-85 transition-opacity"
+            title="Tài khoản & Thiết lập"
+          >
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center shrink-0">
+              <img 
+                src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'} 
+                alt="Avatar" 
+                className="w-full h-full object-cover" 
+              />
+            </div>
+            <div className="text-center lg:text-left leading-tight min-w-0 hidden lg:block">
+              <span className="block text-xs font-black text-white truncate max-w-[120px]">
+                {currentUser?.fullName}
+              </span>
+              <span className="text-[9px] text-[#ea580c] font-bold uppercase tracking-wider block">
+                ADMIN
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSidebarDropdownOpen(!sidebarDropdownOpen)}
+            className="hidden lg:block p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer shrink-0 relative"
+            title="Tài khoản & Thiết lập"
+          >
+            <Settings className="w-4.5 h-4.5" />
+          </button>
+
+          {/* Sidebar-specific Profile Dropdown - opens upwards */}
+          {sidebarDropdownOpen && (
             <>
-              <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileDropdownOpen(false)} />
-              <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-150 py-3 z-50 animate-scale-up text-left">
-                <div className="px-4 pb-2.5 border-b border-gray-100 select-none">
-                  <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider">Đang đăng nhập</span>
-                  <span className="block text-sm font-bold text-gray-900 mt-0.5">{currentUser?.fullName}</span>
-                  <span className="text-xs text-gray-400 font-mono">@{currentUser?.username}</span>
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${currentUser?.role === 'admin' ? 'bg-orange-500' : 'bg-green-500'}`} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 font-mono">
-                      {currentUser?.role === 'admin' ? 'Quyền Hạn: Admin' : 'Quyền Hạn: Nhân Viên'}
-                    </span>
-                  </div>
+              <div className="fixed inset-0 z-40 cursor-default" onClick={() => setSidebarDropdownOpen(false)} />
+              <div className="absolute left-3 bottom-full mb-2 w-60 bg-[#111827] border border-slate-800 rounded-xl shadow-2xl py-2 z-50 text-left text-xs text-slate-200 animate-fade-in">
+                <div className="px-3 py-2 border-b border-slate-800 font-bold block bg-slate-950/60 text-white leading-snug">
+                  {currentUser?.fullName}
+                  <span className="block text-[10px] text-slate-500 mt-0.5 font-normal select-all">@{currentUser?.username}</span>
                 </div>
-                <div className="pt-1.5 pb-1 px-1.5 space-y-0.5">
-                  <button type="button" onClick={() => { setProfileDropdownOpen(false); setChangePasswordError(''); setChangePasswordSuccess(''); setShowChangePasswordModal(true); }} className="w-full px-3.5 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer">
-                    <Key className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi mật khẩu</span>
+                
+                <button
+                  type="button"
+                  onClick={() => { setSidebarDropdownOpen(false); setShowChangePasswordModal(true); }}
+                  className="w-full px-3 py-3 hover:bg-slate-800/80 hover:text-white text-left font-bold block transition"
+                >
+                  Đổi mật khẩu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSidebarDropdownOpen(false); setShowChangeAvatarModal(true); }}
+                  className="w-full px-3 py-3 hover:bg-slate-800/80 hover:text-white text-left font-bold block transition"
+                >
+                  Đổi ảnh đại diện
+                </button>
+                {currentUser?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => { setSidebarDropdownOpen(false); setShowManageUsersModal(true); }}
+                    className="w-full px-3 py-3 hover:bg-slate-800/80 hover:text-white text-left font-bold block transition"
+                  >
+                    Quản lý tài khoản
                   </button>
-                  <button type="button" onClick={() => { setProfileDropdownOpen(false); setSelectedAvatarUrl(currentUser?.avatar || ''); setShowChangeAvatarModal(true); }} className="w-full px-3.5 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer">
-                    <User className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi ảnh đại diện</span>
-                  </button>
-                  {currentUser?.role === 'admin' && (
-                    <button type="button" onClick={() => { setProfileDropdownOpen(false); setStaffError(''); setShowManageUsersModal(true); }} className="w-full px-3.5 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer">
-                      <Settings className="w-4 h-4 text-gray-400 shrink-0" /><span>Quản lý tài khoản</span>
-                    </button>
-                  )}
-                  <button type="button" onClick={() => { setProfileDropdownOpen(false); setImportError(''); setShowBackupModal(true); }} className="w-full px-3.5 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer">
-                    <Database className="w-4 h-4 text-orange-500 shrink-0" /><span className="font-bold text-gray-800">Sao lưu & Khôi phục</span>
-                  </button>
-                  <div className="h-px bg-gray-100 my-1 mx-2" />
-                  <button type="button" onClick={handleLogout} className="w-full px-3.5 py-2 rounded-xl text-left text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition flex items-center gap-2.5 cursor-pointer">
-                    <LogOut className="w-4 h-4 shrink-0" /><span>Đăng xuất</span>
-                  </button>
-                </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setSidebarDropdownOpen(false); setShowBackupModal(true); }}
+                  className="w-full px-3 py-3 hover:bg-slate-800/80 text-orange-400 hover:text-orange-300 font-extrabold block text-left transition"
+                >
+                  Sao lưu & Khôi phục
+                </button>
+                <div className="border-t border-slate-800 my-1" />
+                <button
+                  type="button"
+                  onClick={() => { setSidebarDropdownOpen(false); handleLogout(); }}
+                  className="w-full px-3 py-3 hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 font-bold text-left block transition"
+                >
+                  Đăng xuất
+                </button>
               </div>
             </>
           )}
         </div>
       </aside>
 
-      {/* ===== MAIN CONTENT AREA ===== */}
-      <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+      {/* RIGHT MAIN WORKSPACE PANORAMA */}
+      <div className="flex-grow flex flex-col min-w-0 h-screen overflow-hidden">
+        
+        {/* TOP PATH HEADER BAR */}
+        <header className="bg-white/85 backdrop-blur-md border-b border-gray-150/75 sticky top-0 z-30 px-3 py-2 md:px-6 md:py-3.5 flex items-center justify-between select-none">
+          
+          {/* Breadcrumb path */}
+          <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-500 font-bold">
+            <span className="hidden sm:inline text-slate-400 font-bold uppercase tracking-wider text-[10px]">Hệ thống vận hành</span>
+            <span className="hidden sm:inline text-slate-300">›</span>
+            <span className="text-slate-800 font-black uppercase tracking-wider text-[11px] sm:text-[10px] sm:text-slate-700">
+              {activeTab === 'calendar' && 'Lịch máy'}
+              {activeTab === 'contracts' && 'Đơn thuê'}
+              {activeTab === 'equipment' && 'Thiết bị'}
+              {activeTab === 'revenue' && 'Doanh thu'}
+              {activeTab === 'customers' && 'Khách hàng'}
+              {activeTab === 'expenses' && 'Khoản chi'}
+            </span>
+          </div>
 
-        {/* TOP BAR */}
-        <header className="bg-white/90 backdrop-blur-md border-b border-gray-100 sticky top-0 z-20 shadow-xs pt-safe">
-          <div className="flex items-center justify-between h-14 px-4 sm:px-6 gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            {/* Notification & User Panel for both Mobile & Desktop */}
+            <div 
+              className="bg-orange-50/95 border border-orange-105/80 text-orange-950 px-2.5 sm:px-3.5 py-1 rounded-full flex items-center gap-1.5 text-[10px] sm:text-xs font-extrabold shrink-0 select-none shadow-3xs"
+              title="Ngày hoạt động của hệ thống"
+            >
+              <Calendar className="w-3.5 h-3.5 text-orange-600" />
+              <span>Hệ thống: <span className="font-mono font-black">{systemDate}</span></span>
+            </div>
+            
+            <NotificationCenter
+              contracts={contracts}
+              cameras={cameras}
+              onUpdateContractStatus={handleUpdateContractStatus}
+              systemDate={systemDate}
+              setSystemDate={setSystemDate}
+            />
 
-            {/* Left Section: Mobile Logo */}
-            <div className="flex items-center md:hidden shrink-0">
+            {/* Profile Dropdown for safety / logout */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowLogoModal(true)}
-                className="flex items-center gap-2 mr-1 active:scale-95 transition-transform"
+                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden border border-gray-200 bg-white flex items-center justify-center cursor-pointer"
               >
-                {logoIconType === 'upload' && logoBase64 ? (
-                  <div className="w-8.5 h-8.5 rounded-xl overflow-hidden border border-gray-100 shadow-xs shrink-0">
-                    <img src={logoBase64} alt="Logo" className="w-full h-full object-cover" />
-                  </div>
-                ) : (
-                  <span className="w-8.5 h-8.5 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0" style={{ backgroundColor: logoIconColor }}>
-                    {logoIconType === 'aperture' && <Aperture className="w-4.5 h-4.5" />}
-                    {logoIconType === 'film' && <Film className="w-4.5 h-4.5" />}
-                    {logoIconType === 'sparkles' && <Sparkles className="w-4.5 h-4.5" />}
-                    {logoIconType === 'smile' && <Smile className="w-4.5 h-4.5" />}
-                    {logoIconType === 'image' && <ImageIcon className="w-4.5 h-4.5" />}
-                    {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-4.5 h-4.5" />}
-                  </span>
-                )}
+                <img 
+                  src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover" 
+                />
               </button>
-            </div>
-
-            {/* Center Section: Breadcrumb & Title */}
-            <div className="flex-1 min-w-0 flex items-center justify-start md:justify-start max-md:justify-center">
-              <div className="flex items-center gap-2 max-md:text-center">
-                <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest hidden sm:block shrink-0">Hệ thống vận hành</span>
-                <ChevronRight className="w-3 h-3 text-gray-300 hidden sm:block shrink-0" />
-                <h1 className="text-sm md:text-base font-extrabold text-gray-900 tracking-tight max-md:text-center max-md:font-bold">
-                  {activeTab === 'calendar' && 'Lịch máy'}
-                  {activeTab === 'contracts' && 'Đơn thuê'}
-                  {activeTab === 'equipment' && 'Kho thiết bị'}
-                  {activeTab === 'revenue' && 'Báo cáo doanh thu'}
-                  {activeTab === 'customers' && 'Hồ sơ khách hàng'}
-                  {activeTab === 'expenses' && 'Nhật ký khoản chi'}
-                </h1>
-              </div>
-            </div>
-
-            {/* Right Section: Badges & Controls */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Live date badge */}
-              <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-gray-400 bg-gray-50 border border-gray-150 px-2.5 py-1.5 rounded-lg font-mono shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-bold text-gray-600">{systemDate}</span>
-              </div>
-
-              {/* Notification Center */}
-              <NotificationCenter
-                contracts={contracts}
-                cameras={cameras}
-                onUpdateContractStatus={handleUpdateContractStatus}
-                systemDate={systemDate}
-                setSystemDate={handleUpdateSystemDate}
-                isDateSimulated={isDateSimulated}
-                onResetSystemDate={handleResetSystemDate}
-              />
-
-              {/* Mobile: Profile button */}
-              <div className="md:hidden relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="w-8.5 h-8.5 rounded-xl overflow-hidden border border-gray-200 cursor-pointer shadow-xs active:scale-95 transition-transform flex items-center justify-center bg-gray-50"
-                >
-                  <img
-                    src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'}
-                    alt="Avatar"
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-                {profileDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileDropdownOpen(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl shadow-xl border border-gray-150 py-2.5 z-50 animate-fade-in text-left">
-                      <div className="px-4 pb-2.5 border-b border-gray-100 select-none">
-                        <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider">Đang đăng nhập</span>
-                        <span className="block text-sm font-bold text-gray-900 mt-0.5">{currentUser?.fullName}</span>
-                        <span className="text-xs text-gray-400 font-mono">@{currentUser?.username}</span>
-                      </div>
-                      <div className="pt-1.5 pb-1 px-1.5 space-y-0.5">
-                        <button type="button" onClick={() => { setProfileDropdownOpen(false); setChangePasswordError(''); setChangePasswordSuccess(''); setShowChangePasswordModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Key className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi mật khẩu</span></button>
-                        <button type="button" onClick={() => { setProfileDropdownOpen(false); setSelectedAvatarUrl(currentUser?.avatar || ''); setShowChangeAvatarModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><User className="w-4 h-4 text-gray-400 shrink-0" /><span>Đổi ảnh đại diện</span></button>
-                        {currentUser?.role === 'admin' && <button type="button" onClick={() => { setProfileDropdownOpen(false); setStaffError(''); setShowManageUsersModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Settings className="w-4 h-4 text-gray-400 shrink-0" /><span>Quản lý tài khoản</span></button>}
-                        <button type="button" onClick={() => { setProfileDropdownOpen(false); setImportError(''); setShowBackupModal(true); }} className="w-full px-3 py-2 rounded-xl text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition flex items-center gap-2.5 cursor-pointer"><Database className="w-4 h-4 text-orange-500 shrink-0" /><span className="font-bold text-gray-800">Sao lưu & Khôi phục</span></button>
-                        <div className="h-px bg-gray-100 my-1 mx-2" />
-                        <button type="button" onClick={handleLogout} className="w-full px-3 py-2 rounded-xl text-left text-sm font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition flex items-center gap-2.5 cursor-pointer"><LogOut className="w-4 h-4 shrink-0" /><span>Đăng xuất</span></button>
-                      </div>
+              
+              {profileDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileDropdownOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50 text-left text-xs text-gray-800 animate-fade-in">
+                    <div className="px-3 py-2 border-b border-gray-150 font-bold block bg-gray-50 text-gray-900 leading-snug">
+                      {currentUser?.fullName}
+                      <span className="block text-[10px] text-gray-400 mt-0.5 font-normal select-all">@{currentUser?.username}</span>
                     </div>
-                  </>
-                )}
-              </div>
+                    
+                    {/* General profile links */}
+                    <button
+                      type="button"
+                      onClick={() => { setProfileDropdownOpen(false); setShowChangePasswordModal(true); }}
+                      className="w-full px-3 py-2 hover:bg-orange-50 text-left font-bold block"
+                    >
+                      Đổi mật khẩu
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setProfileDropdownOpen(false); setShowChangeAvatarModal(true); }}
+                      className="w-full px-3 py-2 hover:bg-orange-50 text-left font-bold block"
+                    >
+                      Đổi ảnh đại diện
+                    </button>
+                    {currentUser?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => { setProfileDropdownOpen(false); setShowManageUsersModal(true); }}
+                        className="w-full px-3 py-2 hover:bg-orange-50 text-left font-bold block"
+                      >
+                        Quản lý tài khoản
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setProfileDropdownOpen(false); setShowBackupModal(true); }}
+                      className="w-full px-3 py-2 hover:bg-orange-50 text-left text-orange-600 font-extrabold block"
+                    >
+                      Sao lưu & Khôi phục
+                    </button>
+                    <div className="border-t border-gray-150/85 my-1" />
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full px-3 py-2 hover:bg-rose-50 text-rose-600 font-bold text-left block"
+                    >
+                      Đăng xuất
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* MOBILE NAVIGATION BAR - iOS Style with safe area padding */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-gray-200/80 shadow-[0_-4px_24px_rgba(0,0,0,0.04)] pb-[calc(11px+env(safe-area-inset-bottom))] pt-2 px-1 flex justify-around items-center select-none">
+          {/* Lịch máy */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('calendar')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all text-[10px] font-extrabold ${
+              activeTab === 'calendar' ? 'text-orange-600 scale-102' : 'text-gray-400 active:text-gray-600'
+            }`}
+          >
+            <Calendar className={`w-5 h-5 mb-1 transition-transform ${activeTab === 'calendar' ? 'text-orange-600 scale-110' : 'text-gray-400'}`} />
+            <span>Lịch máy</span>
+          </button>
+          
+          {/* Đơn thuê */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('contracts')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all text-[10px] font-extrabold ${
+              activeTab === 'contracts' ? 'text-orange-600 scale-102' : 'text-gray-400 active:text-gray-600'
+            }`}
+          >
+            <FileText className={`w-5 h-5 mb-1 transition-transform ${activeTab === 'contracts' ? 'text-orange-600 scale-110' : 'text-gray-400'}`} />
+            <span>Đơn thuê</span>
+          </button>
+
+          {/* Thiết bị */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('equipment')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all text-[10px] font-extrabold ${
+              activeTab === 'equipment' ? 'text-orange-600 scale-102' : 'text-gray-400 active:text-gray-600'
+            }`}
+          >
+            <CameraIcon className={`w-5 h-5 mb-1 transition-transform ${activeTab === 'equipment' ? 'text-orange-600 scale-110' : 'text-gray-400'}`} />
+            <span>Thiết bị</span>
+          </button>
+
+          {/* Khách hàng */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('customers')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all text-[10px] font-extrabold ${
+              activeTab === 'customers' ? 'text-orange-600 scale-102' : 'text-gray-400 active:text-gray-600'
+            }`}
+          >
+            <Users className={`w-5 h-5 mb-1 transition-transform ${activeTab === 'customers' ? 'text-orange-600 scale-110' : 'text-gray-400'}`} />
+            <span>Khách</span>
+          </button>
+
+          {/* Doanh thu */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('revenue')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all text-[10px] font-extrabold ${
+              activeTab === 'revenue' ? 'text-orange-600 scale-102' : 'text-gray-400 active:text-gray-600'
+            }`}
+          >
+            <TrendingUp className={`w-5 h-5 mb-1 transition-transform ${activeTab === 'revenue' ? 'text-orange-600 scale-110' : 'text-gray-400'}`} />
+            <span>Doanh thu</span>
+          </button>
+
+          {/* Khoản chi */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('expenses')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all text-[10px] font-extrabold ${
+              activeTab === 'expenses' ? 'text-orange-600 scale-102' : 'text-gray-400 active:text-gray-600'
+            }`}
+          >
+            <DollarSign className={`w-5 h-5 mb-1 transition-transform ${activeTab === 'expenses' ? 'text-orange-600 scale-110' : 'text-gray-400'}`} />
+            <span>Khoản chi</span>
+          </button>
+        </div>
+
+        {/* MAIN BODY AREA */}
+        <main className="flex-grow w-full px-4 sm:px-6 md:px-8 py-6 pb-26 md:pb-6 overflow-y-auto">
+          {/* Header row in main panel content */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 sm:pb-4 mb-4 sm:mb-6 border-b border-gray-150">
+            <div className="space-y-0.5">
+              <span className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest text-[#ea580c] font-display">HỆ THỐNG VẬN HÀNH</span>
+              <h1 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
+                {activeTab === 'calendar' && 'Lịch máy'}
+                {activeTab === 'contracts' && 'Hợp đồng & Đơn thuê'}
+                {activeTab === 'equipment' && 'Kho thiết bị'}
+                {activeTab === 'revenue' && 'Báo cáo doanh thu'}
+                {activeTab === 'customers' && 'Hồ sơ khách hàng'}
+                {activeTab === 'expenses' && 'Nhật ký khoản chi'}
+              </h1>
+            </div>
+            
+            <div className="text-[10px] sm:text-xs text-gray-500 font-bold bg-white border border-gray-150 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-lg sm:rounded-xl shadow-3xs flex items-center gap-1.5 self-start sm:self-auto select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse inline-block"></span>
+              <span>Cập nhật mới nhất:</span>
+              <span className="text-gray-800 font-extrabold">Hôm nay</span>
             </div>
           </div>
 
+          <div className="transition-all duration-200">
+            {activeTab === 'calendar' && (
+              <BookingCalendar
+                cameras={cameras}
+                contracts={contracts}
+                onAddContract={handleAddContract}
+                onDeleteContract={currentUser?.role === 'admin' ? handleDeleteContract : undefined}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                systemDate={systemDate}
+              />
+            )}
 
-        </header>
+            {activeTab === 'contracts' && (
+              <ContractManager
+                contracts={contracts}
+                cameras={cameras}
+                onAddContract={handleAddContract}
+                onUpdateContractStatus={handleUpdateContractStatus}
+                onDeleteContract={currentUser?.role === 'admin' ? handleDeleteContract : undefined}
+                onUpdateContractNote={handleUpdateContractNote}
+                systemDate={systemDate}
+              />
+            )}
 
-        {/* MAIN CONTENT */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-36 md:pb-8">
-          <div className="max-w-7xl mx-auto space-y-6">
+            {activeTab === 'equipment' && (
+              <EquipmentTracker
+                cameras={cameras}
+                onAddCamera={handleAddCamera}
+                onUpdateCamera={handleUpdateCamera}
+                onDeleteCamera={handleDeleteCamera}
+                currentUserRole={currentUser?.role}
+                contracts={contracts}
+                systemDate={systemDate}
+              />
+            )}
 
-            {/* Page Section Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
-              <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-orange-600 block">Hệ thống vận hành</span>
-                <h2 className="text-2xl font-display font-bold text-gray-950 tracking-tight mt-0.5">
-                  {activeTab === 'calendar' && 'Lịch máy'}
-                  {activeTab === 'contracts' && 'Hợp đồng & Đơn thuê'}
-                  {activeTab === 'equipment' && 'Kho thiết bị'}
-                  {activeTab === 'revenue' && 'Báo cáo doanh thu'}
-                  {activeTab === 'customers' && 'Hồ sơ khách hàng'}
-                  {activeTab === 'expenses' && 'Nhật ký khoản chi'}
-                </h2>
-              </div>
-              <div className="text-xs text-gray-400 bg-white border border-gray-150 px-3.5 py-1.5 rounded-xl shadow-xs flex items-center gap-1.5 self-start sm:self-auto select-none">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Cập nhật mới nhất:</span>
-                <span className="font-mono font-bold text-gray-700">Hôm nay</span>
-              </div>
-            </div>
-
-            {/* Active Tab Content */}
-            <div className="animate-fade-in">
-              {activeTab === 'calendar' && (
-                <BookingCalendar
+            {activeTab === 'revenue' && (
+              currentUser?.role === 'admin' ? (
+                <RevenueDashboard
+                  contracts={contracts}
+                  expenses={expenses}
                   cameras={cameras}
-                  contracts={contracts}
-                  onAddContract={handleAddContract}
-                  onDeleteContract={currentUser?.role === 'admin' ? handleDeleteContract : undefined}
-                  selectedDate={selectedDate}
-                  setSelectedDate={setSelectedDate}
-                  systemDate={systemDate}
                 />
-              )}
+              ) : (
+                <div className="bg-white rounded-2xl p-8 text-center border border-gray-150 shadow-xs">
+                  <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb-3" />
+                  <h3 className="text-lg font-bold text-gray-900">Không có quyền truy cập</h3>
+                  <p className="text-sm text-gray-500 mt-1">Vui lòng đăng nhập tài khoản Quản trị viên (Admin) để xem báo cáo tài chính.</p>
+                </div>
+              )
+            )}
 
-              {activeTab === 'contracts' && (
-                <ContractManager
-                  contracts={contracts}
-                  cameras={cameras}
-                  onAddContract={handleAddContract}
-                  onUpdateContractStatus={handleUpdateContractStatus}
-                  onDeleteContract={currentUser?.role === 'admin' ? handleDeleteContract : undefined}
-                  onUpdateContractNote={handleUpdateContractNote}
-                  systemDate={systemDate}
+            {activeTab === 'customers' && (
+              <CustomerManager
+                customers={customers}
+                contracts={contracts}
+                onAddCustomer={handleAddCustomer}
+                onUpdateCustomer={handleUpdateCustomer}
+                onDeleteCustomer={currentUser?.role === 'admin' ? handleDeleteCustomer : undefined}
+              />
+            )}
+
+            {activeTab === 'expenses' && (
+              currentUser?.role === 'admin' ? (
+                <ExpenseTracker
+                  expenses={expenses}
+                  onAddExpense={handleAddExpense}
+                  onDeleteExpense={handleDeleteExpense}
                 />
-              )}
-
-              {activeTab === 'equipment' && (
-                <EquipmentTracker
-                  cameras={cameras}
-                  onAddCamera={handleAddCamera}
-                  onUpdateCamera={handleUpdateCamera}
-                  onDeleteCamera={handleDeleteCamera}
-                  currentUserRole={currentUser?.role}
-                  contracts={contracts}
-                  systemDate={systemDate}
-                />
-              )}
-
-              {activeTab === 'revenue' && (
-                currentUser?.role === 'admin' ? (
-                  <RevenueDashboard
-                    contracts={contracts}
-                    expenses={expenses}
-                    cameras={cameras}
-                  />
-                ) : (
-                  <div className="bg-white rounded-2xl p-8 text-center border border-gray-150 shadow-xs">
-                    <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-gray-900">Không có quyền truy cập</h3>
-                    <p className="text-sm text-gray-500 mt-1">Vui lòng đăng nhập tài khoản Quản trị viên (Admin) để xem báo cáo tài chính.</p>
-                  </div>
-                )
-              )}
-
-              {activeTab === 'customers' && (
-                <CustomerManager
-                  customers={customers}
-                  contracts={contracts}
-                  onAddCustomer={handleAddCustomer}
-                  onUpdateCustomer={handleUpdateCustomer}
-                  onDeleteCustomer={currentUser?.role === 'admin' ? handleDeleteCustomer : undefined}
-                />
-              )}
-
-              {activeTab === 'expenses' && (
-                currentUser?.role === 'admin' ? (
-                  <ExpenseTracker
-                    expenses={expenses}
-                    onAddExpense={handleAddExpense}
-                    onDeleteExpense={handleDeleteExpense}
-                  />
-                ) : (
-                  <div className="bg-white rounded-2xl p-8 text-center border border-gray-150 shadow-xs">
-                    <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-gray-900">Không có quyền truy cập</h3>
-                    <p className="text-sm text-gray-500 mt-1">Vui lòng đăng nhập tài khoản Quản trị viên (Admin) để quản lý ngân sách khoản chi.</p>
-                  </div>
-                )
-              )}
-            </div>
+              ) : (
+                <div className="bg-white rounded-2xl p-8 text-center border border-gray-150 shadow-xs">
+                  <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb-3" />
+                  <h3 className="text-lg font-bold text-gray-900">Không có quyền truy cập</h3>
+                  <p className="text-sm text-gray-500 mt-1">Vui lòng đăng nhập tài khoản Quản trị viên (Admin) để quản lý ngân sách khoản chi.</p>
+                </div>
+              )
+            )}
           </div>
         </main>
 
-        {/* Footer inside content area */}
-        <footer className="bg-white border-t border-gray-100 py-5 mt-6 text-center text-xs text-gray-400 font-medium select-none">
-          <p>© 2026 Tiệm Ảnh Nhà CAOS. Hệ thống quản lý cho thuê máy ảnh chuyên nghiệp.</p>
+        {/* Modern footer */}
+        <footer className="bg-white border-t border-gray-150 py-6 text-center text-xs text-gray-400 font-medium">
+          <p>© 2026 Tiệm ảnh nhà Caos. Hệ thống quản lý vận hành camera và máy ảnh chuyên nghiệp.</p>
         </footer>
-
-        {/* Mobile: Fixed Bottom Navigation Bar */}
-        <div className="md:hidden fixed bottom-4 left-4 right-4 z-40 ios-glass border border-white/50 shadow-[0_12px_32px_rgba(0,0,0,0.12)] rounded-2xl overflow-hidden mb-safe-bottom">
-          <nav className="flex items-center justify-around px-2 py-1.5">
-            {([
-              { key: 'calendar' as const, icon: <Calendar className="w-5 h-5" />, label: 'Lịch máy', show: true },
-              { key: 'contracts' as const, icon: <FileText className="w-5 h-5" />, label: 'Đơn thuê', show: true },
-              { key: 'equipment' as const, icon: <CameraIcon className="w-5 h-5" />, label: 'Thiết bị', show: true },
-              { key: 'customers' as const, icon: <Users className="w-5 h-5" />, label: 'Khách', show: true },
-              { key: 'revenue' as const, icon: <TrendingUp className="w-5 h-5" />, label: 'Doanh thu', show: currentUser?.role === 'admin' },
-              { key: 'expenses' as const, icon: <DollarSign className="w-5 h-5" />, label: 'Chi', show: currentUser?.role === 'admin' },
-            ] as const).filter(item => item.show).map(item => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setActiveTab(item.key)}
-                className={`relative flex flex-col items-center justify-center gap-1 flex-1 py-1.5 rounded-xl transition-all duration-350 cursor-pointer select-none active:scale-95 ${
-                  activeTab === item.key 
-                    ? 'text-orange-600 font-extrabold' 
-                    : 'text-gray-400 hover:text-gray-600 font-medium'
-                }`}
-              >
-                <div className={`p-1.5 rounded-xl transition-all duration-350 ${
-                  activeTab === item.key 
-                    ? 'bg-orange-500/10 text-orange-600 scale-110 shadow-xs' 
-                    : 'bg-transparent text-gray-400'
-                }`}>
-                  {item.icon}
-                </div>
-                <span className="text-[9px] tracking-wide leading-none">{item.label}</span>
-                {activeTab === item.key && (
-                  <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-orange-600 animate-pulse" />
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
-
       </div>
+
+      {/* Modern Logo Customization Modal */}
       {showLogoModal && (
-        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade">
-          <div className="ios-bottom-sheet md:max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
-            {/* iOS Pull Handle */}
-            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
             
             {/* Modal Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2140,30 +2164,30 @@ export default function App() {
               {/* BRAND LOGO PREVIEW BOX */}
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-200/60 text-center flex flex-col items-center">
                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">Xem trước hiển thị (Header)</span>
-                <div className="bg-white border border-gray-150 p-3.5 rounded-xl shadow-xs inline-flex items-center gap-3.5 min-w-[200px] justify-center">
+                <div className="bg-white border border-gray-150 p-4 rounded-xl shadow-sm inline-flex items-center gap-3.5 min-w-[240px] justify-center">
                   {logoIconType === 'upload' && logoBase64 ? (
-                    <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-150 flex items-center justify-center bg-white shrink-0">
+                    <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-150 flex items-center justify-center bg-white shrink-0 shadow-xs">
                       <img src={logoBase64} alt="Preview" className="w-full h-full object-cover" />
                     </div>
                   ) : (
                     <span 
-                      className="p-2.5 rounded-full text-white shrink-0 flex items-center justify-center"
+                      className="w-14 h-14 rounded-full text-white shrink-0 flex items-center justify-center font-bold shadow-xs"
                       style={{ backgroundColor: logoIconColor }}
                     >
-                      {logoIconType === 'aperture' && <Aperture className="w-5.5 h-5.5" />}
-                      {logoIconType === 'film' && <Film className="w-5.5 h-5.5" />}
-                      {logoIconType === 'sparkles' && <Sparkles className="w-5.5 h-5.5 text-yellow-200" />}
-                      {logoIconType === 'smile' && <Smile className="w-5.5 h-5.5" />}
-                      {logoIconType === 'image' && <ImageIcon className="w-5.5 h-5.5" />}
-                      {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-5.5 h-5.5" />}
+                      {logoIconType === 'aperture' && <Aperture className="w-8 h-8" />}
+                      {logoIconType === 'film' && <Film className="w-8 h-8" />}
+                      {logoIconType === 'sparkles' && <Sparkles className="w-8 h-8 text-yellow-200" />}
+                      {logoIconType === 'smile' && <Smile className="w-8 h-8" />}
+                      {logoIconType === 'image' && <ImageIcon className="w-8 h-8" />}
+                      {(logoIconType === 'camera' || logoIconType === 'upload') && <CameraIcon className="w-8 h-8" />}
                     </span>
                   )}
                   <div className="leading-tight text-left">
-                    <span className="font-display font-bold text-gray-950 text-base tracking-tight block uppercase">
-                      {logoText || 'CAMLEASE'}
+                    <span className="font-display font-black text-gray-950 text-[15.5px] tracking-tight block uppercase">
+                      {logoText || 'TIỆM ẢNH NHÀ CAOS'}
                     </span>
-                    <span className="text-[10px] text-gray-400 font-mono block">
-                      {logoSubtitle || 'SYSTEM v1.0'}
+                    <span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mt-0.5">
+                      {logoSubtitle || 'CHO THUÊ MÁY ẢNH GIÁ RẺ'}
                     </span>
                   </div>
                 </div>
@@ -2437,10 +2461,8 @@ export default function App() {
 
       {/* Change Password Modal */}
       {showChangePasswordModal && (
-        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
-          <div className="ios-bottom-sheet md:max-w-md w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
-            {/* iOS Pull Handle */}
-            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2542,10 +2564,8 @@ export default function App() {
 
       {/* Change Avatar Modal */}
       {showChangeAvatarModal && (
-        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
-          <div className="ios-bottom-sheet md:max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
-            {/* iOS Pull Handle */}
-            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2692,10 +2712,8 @@ export default function App() {
 
       {/* Admin User / Account Management Modal */}
       {showManageUsersModal && (
-        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
-          <div className="ios-bottom-sheet md:max-w-3xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
-            {/* iOS Pull Handle */}
-            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-white rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[85vh]">
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -2909,10 +2927,8 @@ export default function App() {
 
       {/* Sao lưu & Khôi phục Dữ liệu Modal */}
       {showBackupModal && (
-        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur-xs z-50 animate-backdrop-fade text-left">
-          <div className="ios-bottom-sheet md:max-w-xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
-            {/* iOS Pull Handle */}
-            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2.5 shrink-0" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
             
             {/* Header */}
             <div className="px-6 py-4.5 border-b border-gray-150 flex justify-between items-center bg-gray-50/70 select-none">
@@ -3114,7 +3130,6 @@ export default function App() {
           </div>
         </div>
       )}
-
 
       {/* Global Toast Notifications Container */}
       <ToastContainer toasts={toasts} onClose={removeToast} />
