@@ -256,34 +256,36 @@ export default function App() {
     return closestDate;
   });
 
+  const [supabaseInitialized, setSupabaseInitialized] = useState<boolean>(false);
+
   // Sync data states to local storage and Supabase
   useEffect(() => {
     saveStoredData('cameras', cameras);
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabaseInitialized) {
       syncToSupabase('cameras', cameras);
     }
-  }, [cameras]);
+  }, [cameras, supabaseInitialized]);
 
   useEffect(() => {
     saveStoredData('contracts', contracts);
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabaseInitialized) {
       syncToSupabase('contracts', contracts);
     }
-  }, [contracts]);
+  }, [contracts, supabaseInitialized]);
 
   useEffect(() => {
     saveStoredData('customers', customers);
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabaseInitialized) {
       syncToSupabase('customers', customers);
     }
-  }, [customers]);
+  }, [customers, supabaseInitialized]);
 
   useEffect(() => {
     saveStoredData('expenses', expenses);
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabaseInitialized) {
       syncToSupabase('expenses', expenses);
     }
-  }, [expenses]);
+  }, [expenses, supabaseInitialized]);
 
   useEffect(() => {
     saveStoredData('systemDate', systemDate);
@@ -311,10 +313,10 @@ export default function App() {
 
   useEffect(() => {
     saveStoredData('registeredUsers', registeredUsers);
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabaseInitialized) {
       syncToSupabase('registeredUsers', registeredUsers);
     }
-  }, [registeredUsers]);
+  }, [registeredUsers, supabaseInitialized]);
 
   useEffect(() => {
     saveStoredData('currentUser', currentUser);
@@ -322,12 +324,12 @@ export default function App() {
 
   useEffect(() => {
     saveStoredData('camlease_snapshots', snapshots);
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabaseInitialized) {
       syncToSupabase('camlease_snapshots', snapshots);
     }
-  }, [snapshots]);
+  }, [snapshots, supabaseInitialized]);
 
-  // Load initial data block asynchronously from Supabase if configured or seed if empty
+  // Load initial data block asynchronously from Supabase if configured or seed if the cloud is empty.
   useEffect(() => {
     if (isSupabaseConfigured) {
       const loadInitialSupabaseData = async () => {
@@ -338,6 +340,21 @@ export default function App() {
           const cloudExpenses = await fetchFromSupabase('expenses');
           const cloudUsers = await fetchFromSupabase('registeredUsers');
           const cloudSnapshots = await fetchFromSupabase('camlease_snapshots');
+
+          const cloudFetchFailed = [
+            cloudCameras,
+            cloudContracts,
+            cloudCustomers,
+            cloudExpenses,
+            cloudUsers,
+            cloudSnapshots,
+          ].some(item => item === null);
+
+          if (cloudFetchFailed) {
+            console.warn('[Supabase] One or more cloud fetches failed. Keeping local state and not seeding cloud.');
+            addToast('Không thể tải dữ liệu Supabase. Vẫn giữ dữ liệu cục bộ mà không ghi đè lên cloud.', 'warning');
+            return;
+          }
 
           const hasCloudCameras = Array.isArray(cloudCameras) && cloudCameras.length > 0;
           const hasCloudContracts = Array.isArray(cloudContracts) && cloudContracts.length > 0;
@@ -354,17 +371,19 @@ export default function App() {
           if (hasCloudSnapshots) setSnapshots(cloudSnapshots);
 
           const seedTasks: Promise<void>[] = [];
-          if (!hasCloudCameras && cameras.length > 0) seedTasks.push(syncToSupabase('cameras', cameras));
-          if (!hasCloudContracts && contracts.length > 0) seedTasks.push(syncToSupabase('contracts', contracts));
-          if (!hasCloudCustomers && customers.length > 0) seedTasks.push(syncToSupabase('customers', customers));
-          if (!hasCloudExpenses && expenses.length > 0) seedTasks.push(syncToSupabase('expenses', expenses));
-          if (!hasCloudUsers && registeredUsers.length > 0) seedTasks.push(syncToSupabase('registeredUsers', registeredUsers));
-          if (!hasCloudSnapshots && snapshots.length > 0) seedTasks.push(syncToSupabase('camlease_snapshots', snapshots));
+          if (!hasCloudCameras && cloudCameras && cameras.length > 0) seedTasks.push(syncToSupabase('cameras', cameras));
+          if (!hasCloudContracts && cloudContracts && contracts.length > 0) seedTasks.push(syncToSupabase('contracts', contracts));
+          if (!hasCloudCustomers && cloudCustomers && customers.length > 0) seedTasks.push(syncToSupabase('customers', customers));
+          if (!hasCloudExpenses && cloudExpenses && expenses.length > 0) seedTasks.push(syncToSupabase('expenses', expenses));
+          if (!hasCloudUsers && cloudUsers && registeredUsers.length > 0) seedTasks.push(syncToSupabase('registeredUsers', registeredUsers));
+          if (!hasCloudSnapshots && cloudSnapshots && snapshots.length > 0) seedTasks.push(syncToSupabase('camlease_snapshots', snapshots));
 
           if (seedTasks.length > 0) {
             console.log('[Supabase] Seeding missing cloud data from local store');
             await Promise.all(seedTasks);
           }
+
+          setSupabaseInitialized(true);
         } catch (err) {
           console.error('[Supabase] Sync boot error, falling back locally', err);
           addToast('Đồng bộ Supabase thất bại. Đang chạy chế độ Local Offline.', 'warning');
