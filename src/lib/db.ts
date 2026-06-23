@@ -366,6 +366,15 @@ async function seedExpenses(expenses: Expense[]): Promise<void> {
  * KHÔNG ghi đè Supabase bằng localStorage nếu row đã tồn tại —
  * điều này đảm bảo dữ liệu cloud không bị mất khi mở trên domain/trình duyệt mới.
  */
+function tryParseJson(value: any) {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
 export async function loadSetting<T>(key: string, defaultValue: T): Promise<T> {
   // Luôn lưu vào localStorage để dùng offline
   if (!isSupabaseConfigured()) {
@@ -379,9 +388,16 @@ export async function loadSetting<T>(key: string, defaultValue: T): Promise<T> {
       .maybeSingle(); // maybeSingle: trả null thay vì lỗi khi không có row
 
     if (!error && data) {
-      // Có trên Supabase → đồng bộ xuống localStorage và trả về
-      localSave(key, data.value as T);
-      return data.value as T;
+      let value = tryParseJson(data.value);
+      if (value === null || value === undefined) {
+        const localVal = localLoad(key, defaultValue);
+        await supabase
+          .from('settings')
+          .upsert({ key, value: localVal }, { onConflict: 'key', ignoreDuplicates: true });
+        return localVal;
+      }
+      localSave(key, value as T);
+      return value as T;
     }
 
     // Không có trên Supabase → lấy từ localStorage rồi seed lên (lần đầu tiên)
