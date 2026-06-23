@@ -29,35 +29,6 @@ export const VIET_BANKS = [
   { id: 'STB', name: 'Sacombank' },
 ];
 
-export const renderDocTypeLabel = (docType: string) => {
-  switch (docType) {
-    case 'CCCD': return 'Giữ CCCD gốc';
-    case 'CCCD_And_1M': return 'Giữ CCCD + 1 triệu';
-    case 'GPLX': return 'Giữ bằng lái (GPLX)';
-    case 'Passport': return 'Giữ hộ chiếu (Passport)';
-    case 'CashDeposit': return 'Đặt cọc tiền mặt';
-    case 'Other': return 'Thế chấp tài sản khác';
-    default: return docType;
-  }
-};
-
-const getBankBin = (id: string): string => {
-  const bins: Record<string, string> = {
-    'MB': '970422',
-    'VCB': '970436',
-    'TCB': '970407',
-    'ACB': '970416',
-    'BIDV': '970418',
-    'ICB': '970415',
-    'VBA': '970405',
-    'TPB': '970423',
-    'VPB': '970432',
-    'VIB': '970441',
-    'STB': '970403'
-  };
-  return bins[id] || id;
-};
-
 export default function ContractManager({
   contracts,
   cameras,
@@ -71,8 +42,6 @@ export default function ContractManager({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedContract, setSelectedContract] = useState<RentalContract | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const [isQrLoading, setIsQrLoading] = useState<boolean>(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [customAlertMessage, setCustomAlertMessage] = useState<string | null>(null);
 
@@ -222,8 +191,6 @@ export default function ContractManager({
     note: ''
   });
 
-  const [prevCalculatedTotal, setPrevCalculatedTotal] = useState(0);
-
   // Predefined Contract/Rental Form templates (Mẫu đơn thuê sẵn có)
   const DEFAULT_TEMPLATES: ContractTemplate[] = useMemo(() => [
     {
@@ -239,8 +206,7 @@ export default function ContractManager({
       depositAmount: 2000000,
       paidAmountPct: 0,
       paidAmount: 0,
-      note: 'Học viên câu lạc bộ chụp ảnh thường niên. Hỗ trợ mượn kèm sạc dự phòng + thẻ nhớ 32GB miễn phí.',
-      durationDays: 1
+      note: 'Học viên câu lạc bộ chụp ảnh thường niên. Hỗ trợ mượn kèm sạc dự phòng + thẻ nhớ 32GB miễn phí.'
     },
     {
       id: 'tpl-2',
@@ -255,8 +221,7 @@ export default function ContractManager({
       depositAmount: 15000000,
       paidAmountPct: 50,
       paidAmount: 750000,
-      note: 'Chuẩn bị sẵn 4 pin sạc đầy hơi, dock sạc đôi & thẻ nhớ 128GB chuyên dụng chụp ảnh sự kiện RAW liên tục.',
-      durationDays: 2
+      note: 'Chuẩn bị sẵn 4 pin sạc đầy hơi, dock sạc đôi & thẻ nhớ 128GB chuyên dụng chụp ảnh sự kiện RAW liên tục.'
     },
     {
       id: 'tpl-3',
@@ -271,8 +236,7 @@ export default function ContractManager({
       depositAmount: 5000000,
       paidAmountPct: 100,
       paidAmount: 250000,
-      note: 'Hỗ trợ reset thiết bị cài sẵn profile giả lập màu phim Classic Chrome của tiệm.',
-      durationDays: 1
+      note: 'Hỗ trợ reset thiết bị cài sẵn profile giả lập màu phim Classic Chrome của tiệm.'
     }
   ], []);
 
@@ -288,28 +252,18 @@ export default function ContractManager({
   }, [DEFAULT_TEMPLATES, customTemplates]);
 
   const handleApplyTemplate = (tpl: ContractTemplate) => {
-    // Determine dynamic rate for the items in the template using the right duration
-    const tplDays = tpl.durationDays || (tpl.is6Hours ? 1 : 1);
+    // Determine dynamic rate for the items in the template
+    const days = tpl.is6Hours ? 1 : 1; 
     const dailyTotal = tpl.selectedCameraIds.reduce((sum, id) => {
       const cam = cameras.find(c => c.id === id);
-      return sum + (cam ? getCameraRateForDuration(cam, tplDays, tpl.is6Hours) : 0);
+      return sum + (cam ? getCameraRateForDuration(cam, days, tpl.is6Hours) : 0);
     }, 0);
 
-    const calculatedTotalRate = tpl.is6Hours ? dailyTotal : dailyTotal * tplDays;
+    const calculatedTotalRate = tpl.is6Hours ? dailyTotal : dailyTotal * days;
     let computedPaid = tpl.paidAmount;
     if (tpl.paidAmountPct > 0) {
       computedPaid = Math.round(calculatedTotalRate * (tpl.paidAmountPct / 100));
     }
-
-    const calculatedEndDate = () => {
-      if (tpl.is6Hours) return systemDate;
-      const d = new Date(systemDate + 'T00:00:00');
-      d.setDate(d.getDate() + (tplDays - 1));
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    };
 
     setNewContractForm({
       customerName: tpl.customerName,
@@ -318,7 +272,7 @@ export default function ContractManager({
       customerDocNote: tpl.customerDocNote,
       selectedCameraIds: tpl.selectedCameraIds.filter(id => cameras.some(c => c.id === id)),
       startDate: systemDate,
-      endDate: calculatedEndDate(), 
+      endDate: tpl.is6Hours ? systemDate : systemDate, 
       is6Hours: tpl.is6Hours,
       returnTime: tpl.returnTime || '18:00',
       depositAmount: tpl.depositAmount,
@@ -349,8 +303,7 @@ export default function ContractManager({
       depositAmount: newContractForm.depositAmount,
       paidAmountPct: 0,
       paidAmount: newContractForm.paidAmount,
-      note: newContractForm.note,
-      durationDays: calculatedDays
+      note: newContractForm.note
     };
 
     const updated = [...customTemplates, newTpl];
@@ -419,95 +372,6 @@ export default function ContractManager({
     }, 0);
     return newContractForm.is6Hours ? dailyTotal : dailyTotal * calculatedDays;
   }, [newContractForm.selectedCameraIds, calculatedDays, newContractForm.is6Hours, cameras]);
-
-  const getCameraRecommendedDeposit = (id: string): number => {
-    switch (id) {
-      case 'cam-1': return 2000000; // Canon EOS R50
-      case 'cam-2': return 5000000; // Fujifilm X-S15
-      case 'cam-3': return 10000000; // Sony A7M4
-      case 'cam-4': return 5000000; // Sony FE 24-70mm GM II
-      case 'cam-5': return 1000000; // Sigma 56mm f/1.4
-      default: return 2000000;
-    }
-  };
-
-  const calculatedRecommendedDeposit = useMemo(() => {
-    return newContractForm.selectedCameraIds.reduce((sum, id) => sum + getCameraRecommendedDeposit(id), 0);
-  }, [newContractForm.selectedCameraIds]);
-
-  // Synchronize dynamic reservation deposit value, defaulting to exactly 50% of calculated total price
-  useEffect(() => {
-    if (calculatedTotal !== prevCalculatedTotal) {
-      const prevHalfPrice = Math.round(prevCalculatedTotal * 0.5);
-      if (newContractForm.paidAmount === 0 || newContractForm.paidAmount === prevHalfPrice) {
-        setNewContractForm(prev => ({
-          ...prev,
-          paidAmount: Math.round(calculatedTotal * 0.5)
-        }));
-      }
-      setPrevCalculatedTotal(calculatedTotal);
-    }
-  }, [calculatedTotal, prevCalculatedTotal, newContractForm.paidAmount]);
-
-  // Convert VietQR external QR image to Base64 to bypass safari / mobile canvas security blocking
-  useEffect(() => {
-    if (!selectedContract) {
-      setQrDataUrl('');
-      return;
-    }
-
-    const isPendingStatus = selectedContract.status === 'Pending';
-    const qrAmount = isPendingStatus ? selectedContract.paidAmount : (selectedContract.totalPrice - selectedContract.paidAmount);
-    const qrText = selectedContract.contractCode + (isPendingStatus ? " coc giu cho" : " thanh toan");
-
-    const fallbackQrUrl = `https://img.vietqr.io/image/${bankConfig.bankId}-${bankConfig.accountNo}-compact2.png?amount=${
-      qrAmount
-    }&addInfo=${encodeURIComponent(qrText)}&accountName=${encodeURIComponent(bankConfig.accountName)}`;
-
-    setIsQrLoading(true);
-
-    // Call the official VietQR generated JSON endpoint (fully supports CORS on all origins and returns base64 directly)
-    fetch("https://api.vietqr.io/v2/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        accountNo: bankConfig.accountNo,
-        accountName: bankConfig.accountName,
-        acqId: getBankBin(bankConfig.bankId),
-        amount: qrAmount,
-        addInfo: qrText,
-        format: "text",
-        template: "compact2"
-      })
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("HTTP load error: " + res.status);
-        return res.json();
-      })
-      .then((result) => {
-        if (result && result.code === "00" && result.data && result.data.qrDataURL) {
-          setQrDataUrl(result.data.qrDataURL);
-          setIsQrLoading(false);
-        } else {
-          throw new Error("VietQR API error: " + (result?.desc || "unknown"));
-        }
-      })
-      .catch((err) => {
-        console.error('Lỗi khi nạp QR dạng Base64 từ JSON API, sử dụng dự phòng trực tiếp:', err);
-        setQrDataUrl(fallbackQrUrl);
-        setIsQrLoading(false);
-      });
-  }, [
-    selectedContract?.id,
-    selectedContract?.status,
-    bankConfig.bankId,
-    bankConfig.accountNo,
-    bankConfig.accountName,
-    selectedContract?.totalPrice,
-    selectedContract?.paidAmount
-  ]);
 
   const handleCreateContract = (e: React.FormEvent) => {
     e.preventDefault();
@@ -613,42 +477,42 @@ export default function ContractManager({
   return (
     <div className="space-y-6">
       {/* Search and Filters Header */}
-      <div className="bg-white border border-gray-150 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 sm:space-y-4">
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-base sm:text-xl font-black text-gray-850 flex items-center gap-2 select-none">
-              <FileText className="text-orange-600 w-4.5 h-4.5 sm:w-5 bg-orange-50 p-1 rounded-md sm:bg-transparent sm:p-0" /> Quản Lý Hợp Đồng Thuê Máy
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <FileText className="text-orange-600" /> Quản Lý Hợp Đồng Thuê Máy
             </h2>
-            <p className="text-xs sm:text-sm text-gray-500 leading-normal">
+            <p className="text-sm text-gray-500">
               Kiểm tra tính trạng hợp đồng, lưu trữ thủ tục hồ sơ thế chấp và thu tiền cọc khách hàng.
             </p>
           </div>
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap gap-2 self-start md:self-auto">
             <button
               onClick={handleExportCSV}
-              className="bg-slate-50 border border-gray-200 text-gray-700 font-extrabold sm:font-semibold px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm flex items-center justify-center gap-1.5 hover:bg-slate-100 hover:text-gray-900 transition-all cursor-pointer shadow-4xs"
+              className="bg-slate-50 border border-gray-205 text-gray-700 font-semibold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 hover:bg-slate-100 hover:text-gray-900 transition-colors cursor-pointer"
               title="Xuất định dạng CSV danh sách đã lọc"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Xuất bản CSV
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Xuất báo cáo CSV
             </button>
             <button
               onClick={() => setShowAddModal(true)}
-              className="bg-orange-600 text-white font-extrabold sm:font-medium px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm flex items-center justify-center gap-1.5 hover:bg-orange-700 transition-all cursor-pointer shadow-2xs"
+              className="bg-orange-600 text-white font-medium px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 hover:bg-orange-700 transition-colors cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Lập hợp đồng
+              <Plus className="w-4 h-4" /> Lập hợp đồng mới
             </button>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-grow">
-            <Search className="absolute left-3 top-2.5 sm:top-3 h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <input
               type="text"
               placeholder="Tìm theo mã HĐ, tên khách hàng, SĐT..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-8.5 pr-4 py-1.5 sm:py-2.5 text-xs sm:text-sm w-full border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-400/80"
+              className="pl-9 pr-4 py-2 text-sm w-full border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none"
             />
           </div>
 
@@ -702,8 +566,8 @@ export default function ContractManager({
                         <a href={`tel:${c.customerPhone}`} className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 border border-orange-100/60 rounded-lg text-[11px] text-orange-700 font-mono font-bold transition-all shrink-0">
                           <Phone className="w-3 h-3 text-orange-500 fill-orange-500/10" /> {c.customerPhone}
                         </a>
-                        <span className="text-[10px] text-gray-500 bg-gray-50 border border-gray-200/50 px-1.5 py-0.5 rounded font-bold">
-                          {renderDocTypeLabel(c.customerDocType)}: {c.customerDocNote || 'Chưa có thông tin'}
+                        <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-200/50 px-1.5 py-0.5 rounded font-medium">
+                          {c.customerDocType}: {c.customerDocNote || 'Chưa có thông tin'}
                         </span>
                       </div>
                     </div>
@@ -741,59 +605,29 @@ export default function ContractManager({
                         {c.totalPrice.toLocaleString()}đ
                       </span>
                     </div>
-                    {c.status === 'Pending' ? (
-                      <>
-                        <div className="flex items-center justify-between text-xs text-amber-850 bg-amber-50/40 px-1 rounded-sm">
-                          <span className="font-medium">Số cọc giữ máy cần đóng:</span>
-                          <span className="font-mono font-bold">
-                            {c.paidAmount.toLocaleString()}đ
+                    <div className="flex items-center justify-between text-xs pb-1 border-b border-gray-100">
+                      <span className="text-gray-500 font-medium">Đã thanh toán:</span>
+                      <span className="font-mono font-bold text-emerald-600">
+                        {c.paidAmount.toLocaleString()}đ
+                      </span>
+                    </div>
+                    {/* Remaining debt & deposit details */}
+                    <div className="pt-1 select-none flex items-center justify-between gap-2">
+                      <div className="text-[10px] text-gray-400 font-medium">
+                        Cọc thế chấp: <strong className="text-gray-750">{c.depositAmount > 0 ? `${c.depositAmount.toLocaleString()}đ` : 'Không có'}</strong>
+                      </div>
+                      <div>
+                        {c.totalPrice - c.paidAmount > 0 ? (
+                          <span className="text-[10px] bg-red-50 text-red-700 border border-red-200/70 px-2 py-0.5 rounded-md font-bold shadow-3xs">
+                            Còn nợ: {(c.totalPrice - c.paidAmount).toLocaleString()}đ
                           </span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs pb-1 border-b border-gray-100">
-                          <span className="text-gray-500 font-medium">Thực tế đã thanh toán:</span>
-                          <span className="font-mono font-bold text-gray-400">
-                            0đ
+                        ) : (
+                          <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200/70 px-2 py-0.5 rounded-md font-bold shadow-3xs">
+                            ✓ Đã thanh toán đủ
                           </span>
-                        </div>
-                        {/* Remaining debt & deposit details */}
-                        <div className="pt-1 select-none flex items-center justify-between gap-2">
-                          <div className="text-[10px] text-gray-400 font-medium">
-                            Cọc thế chấp: <strong className="text-gray-750">{c.depositAmount > 0 ? `${c.depositAmount.toLocaleString()}đ` : 'Không có'}</strong>
-                          </div>
-                          <div>
-                            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200/70 px-2 py-0.5 rounded-md font-bold shadow-3xs">
-                              Chờ cọc {c.paidAmount.toLocaleString()}đ
-                            </span>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-between text-xs pb-1 border-b border-gray-100">
-                          <span className="text-gray-500 font-medium">Đã thanh toán:</span>
-                          <span className="font-mono font-bold text-emerald-600">
-                            {c.paidAmount.toLocaleString()}đ
-                          </span>
-                        </div>
-                        {/* Remaining debt & deposit details */}
-                        <div className="pt-1 select-none flex items-center justify-between gap-2">
-                          <div className="text-[10px] text-gray-400 font-medium">
-                            Cọc thế chấp: <strong className="text-gray-750">{c.depositAmount > 0 ? `${c.depositAmount.toLocaleString()}đ` : 'Không có'}</strong>
-                          </div>
-                          <div>
-                            {c.totalPrice - c.paidAmount > 0 ? (
-                              <span className="text-[10px] bg-red-50 text-red-700 border border-red-200/70 px-2 py-0.5 rounded-md font-bold shadow-3xs">
-                                Còn nợ: {(c.totalPrice - c.paidAmount).toLocaleString()}đ
-                              </span>
-                            ) : (
-                              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200/70 px-2 py-0.5 rounded-md font-bold shadow-3xs">
-                                ✓ Đã thanh toán đủ
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    )}
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Ghi chú nhanh (Quick Notes for mobile) */}
@@ -999,15 +833,7 @@ export default function ContractManager({
                       <td className="px-6 py-4 text-right font-mono font-bold text-gray-900">
                         <div>{c.totalPrice.toLocaleString()}đ</div>
                         <div className="text-[10px] text-gray-400 font-sans font-normal">
-                          {c.status === 'Pending' ? (
-                            <span className="text-amber-700 font-bold inline-block bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[10px]" title="Khoản cọc giữ máy cần chuyển khoản để hoàn thiện duyệt lịch">
-                              Sẽ cọc: {c.paidAmount.toLocaleString()}đ (Chưa đóng)
-                            </span>
-                          ) : (
-                            <>
-                              Đã thanh toán: <span className="text-emerald-600 font-semibold">{c.paidAmount.toLocaleString()}đ</span>
-                            </>
-                          )}
+                          Đã thanh toán: <span className="text-emerald-600 font-semibold">{c.paidAmount.toLocaleString()}đ</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -1145,7 +971,7 @@ export default function ContractManager({
                     <p className="font-extrabold text-gray-900 text-sm sm:text-base">{selectedContract.customerName}</p>
                     <p className="text-xs text-gray-500 font-mono">SĐT: {selectedContract.customerPhone}</p>
                     <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5 flex-wrap">
-                      Thế chấp: <span className="bg-white px-2 py-0.5 rounded text-gray-800 border border-gray-200 font-bold text-[10px] sm:text-xs shadow-3xs">{renderDocTypeLabel(selectedContract.customerDocType)}</span>
+                      Thế chấp: <span className="bg-white px-2 py-0.5 rounded text-gray-800 border border-gray-200 font-bold text-[10px] sm:text-xs shadow-3xs">{selectedContract.customerDocType}</span>
                     </p>
                     {selectedContract.customerDocNote && (
                       <p className="text-xs text-amber-900 bg-amber-50/70 border border-amber-100 p-2 rounded mt-2 font-mono leading-relaxed max-w-full break-words">
@@ -1156,14 +982,20 @@ export default function ContractManager({
 
                   <div className="space-y-1">
                     <h4 className="text-[10px] sm:text-xs uppercase font-bold text-gray-400 mb-1">Thông tin thời hạn</h4>
-                    <div className="space-y-1.5 text-xs sm:text-sm text-gray-750">
+                    <div className="space-y-1.5 text-xs sm:text-sm text-gray-700">
                       <p className="flex justify-between items-center gap-2">
                         <span className="text-gray-500">Bắt đầu:</span>
-                        <strong className="text-gray-800 text-right font-medium">{selectedContract.startDate}</strong>
+                        <strong className="text-gray-850 text-right">{selectedContract.startDate}</strong>
                       </p>
                       <p className="flex justify-between items-start gap-2">
-                        <span className="text-gray-500 shrink-0">Trả máy dự kiến:</span>
-                        <strong className="text-gray-800 text-right font-medium">{selectedContract.is6Hours ? 'Gói 6 tiếng trong ngày' : selectedContract.endDate}</strong>
+                        <span className="text-gray-550 shrink-0">Trả máy dự kiến:</span>
+                        <strong className="text-gray-850 text-right">{selectedContract.is6Hours ? `Trong ngày (hẹn ${selectedContract.returnTime || '18:00'})` : selectedContract.endDate}</strong>
+                      </p>
+                      <p className="flex justify-between items-center border-t border-gray-200/50 pt-1.5 gap-2">
+                        <span className="text-gray-550">Thời hạn:</span>
+                        <span className={selectedContract.is6Hours ? 'font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60 text-[10px] sm:text-[11px]' : 'font-extrabold text-orange-650'}>
+                          {selectedContract.is6Hours ? `⏱️ Gói 6 tiếng (Trả: ${selectedContract.returnTime || '18:00'})` : `${Math.max(1, Math.ceil((new Date(selectedContract.endDate).getTime() - new Date(selectedContract.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1)} ngày`}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -1171,13 +1003,13 @@ export default function ContractManager({
 
                 {/* Rental Items detail */}
                 <div>
-                  <h4 className="text-[10px] sm:text-xs uppercase font-bold text-gray-400 mb-1.5">Danh sách thiết bị thuê</h4>
-                  <div className="border border-gray-155 rounded-xl overflow-hidden divide-y divide-gray-100 shadow-4xs font-sans">
+                  <h4 className="text-[10px] sm:text-xs uppercase font-bold text-gray-400 mb-2">Danh sách thiết bị trong hợp đồng</h4>
+                  <div className="border border-gray-150 rounded-xl overflow-hidden divide-y divide-gray-100">
                     {selectedContract.items.map((i, idx) => (
                       <div key={idx} className="p-2.5 sm:p-3 bg-white flex justify-between items-center text-xs sm:text-sm gap-2">
-                        <div className="font-semibold text-gray-800 truncate flex-1 min-w-0" title={i.cameraName}>{i.cameraName}</div>
-                        <div className="text-right font-bold text-gray-700 shrink-0 font-sans">
-                          {Math.round(i.dailyRate).toLocaleString()}đ <span className="text-[10px] text-gray-450 font-normal">{selectedContract.is6Hours ? '/6h' : '/ngày'}</span>
+                        <div className="font-bold text-gray-850 hover:text-orange-650 truncate flex-1 min-w-0" title={i.cameraName}>{i.cameraName}</div>
+                        <div className="text-right font-mono font-bold text-gray-650 shrink-0">
+                          {Math.round(i.dailyRate).toLocaleString()}đ <span className="text-[10px] text-gray-400 font-normal">{selectedContract.is6Hours ? '/gói 6h' : '/ngày'}</span>
                         </div>
                       </div>
                     ))}
@@ -1185,172 +1017,143 @@ export default function ContractManager({
                 </div>
 
                 {/* Pricing Summary Block */}
-                <div className="bg-orange-50/45 border border-orange-100 p-3 sm:p-4 rounded-xl space-y-2">
-                  <div className="flex justify-between items-start sm:items-center text-xs sm:text-sm gap-2">
-                    <span className="text-gray-600 font-medium leading-tight">Tổng tiền thuê dự kiến:</span>
-                    <span className="font-bold text-gray-900 text-sm sm:text-base font-sans shrink-0 whitespace-nowrap">{selectedContract.totalPrice.toLocaleString()}đ</span>
+                <div className="bg-orange-50/50 border border-orange-100 p-3 sm:p-4 rounded-xl space-y-2">
+                  <div className="flex justify-between items-center text-xs sm:text-sm">
+                    <span className="text-gray-650">Tổng tiền thuê dự kiến:</span>
+                    <span className="font-mono font-extrabold text-gray-900 text-sm sm:text-base">{selectedContract.totalPrice.toLocaleString()}đ</span>
                   </div>
-                  <div className="flex justify-between items-start sm:items-center text-xs sm:text-sm border-t border-orange-100/40 pt-2 text-gray-650 gap-2">
-                    <span className="leading-tight">Trị giá cọc thế chấp (VNĐ cọc):</span>
-                    <span className="font-semibold text-gray-800 font-sans shrink-0 whitespace-nowrap">{selectedContract.depositAmount.toLocaleString()}đ</span>
+                  <div className="flex justify-between items-center text-xs sm:text-sm border-t border-orange-100/50 pt-2 text-gray-600">
+                    <span>Trị giá cọc thế chấp (hoặc VNĐ cọc):</span>
+                    <span className="font-mono font-bold text-gray-850">{selectedContract.depositAmount.toLocaleString()}đ</span>
                   </div>
-                  
-                  {selectedContract.status === 'Pending' ? (
-                    <>
-                      <div className="flex justify-between items-start sm:items-center text-xs sm:text-sm border-t border-orange-100/40 pt-2 text-gray-650 gap-2">
-                        <span className="leading-tight font-medium text-amber-850 bg-amber-50 px-1 rounded-sm">Số tiền khách cần cọc để giữ máy ({selectedContract.totalPrice > 0 ? Math.round((selectedContract.paidAmount / selectedContract.totalPrice) * 100) : 0}%):</span>
-                        <span className="font-bold text-amber-700 font-sans shrink-0 whitespace-nowrap">{selectedContract.paidAmount.toLocaleString()}đ</span>
-                      </div>
-                      <div className="flex justify-between items-start sm:items-center text-xs sm:text-sm border-t border-orange-100/40 pt-2 text-gray-650 gap-2">
-                        <span className="leading-tight">Thực tế khách đã thanh toán:</span>
-                        <span className="font-semibold text-gray-400 font-sans shrink-0 whitespace-nowrap">0đ <span className="text-[10px]">(Chưa cọc)</span></span>
-                      </div>
-                      <div className="flex justify-between items-start sm:items-center text-xs sm:text-sm border-t border-orange-200 pt-2 font-bold text-gray-900 gap-2">
-                        <span className="leading-tight">Còn lại cần thanh toán khi nhận máy:</span>
-                        <span className="text-rose-600 text-sm sm:text-base font-extrabold font-sans shrink-0 whitespace-nowrap">{(selectedContract.totalPrice - selectedContract.paidAmount).toLocaleString()}đ</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-start sm:items-center text-xs sm:text-sm border-t border-orange-100/40 pt-2 text-gray-650 gap-2">
-                        <span className="leading-tight">Khách cọc đặt giữ máy trước ({selectedContract.totalPrice > 0 ? Math.round((selectedContract.paidAmount / selectedContract.totalPrice) * 100) : 0}%):</span>
-                        <span className="font-bold text-emerald-700 font-sans shrink-0 whitespace-nowrap">{selectedContract.paidAmount.toLocaleString()}đ</span>
-                      </div>
-                      <div className="flex justify-between items-start sm:items-center text-xs sm:text-sm border-t border-orange-200 pt-2 font-bold text-gray-900 gap-2">
-                        <span className="leading-tight">Dư nợ còn lại đã thu / cần thu:</span>
-                        <span className="text-rose-600 text-sm sm:text-base font-extrabold font-sans shrink-0 whitespace-nowrap">{(selectedContract.totalPrice - selectedContract.paidAmount).toLocaleString()}đ</span>
-                      </div>
-                    </>
-                  )}
+                  <div className="flex justify-between items-center text-xs sm:text-sm border-t border-orange-100/50 pt-2 text-gray-600">
+                    <span>Đã thanh toán trước:</span>
+                    <span className="font-mono font-bold text-emerald-700">{selectedContract.paidAmount.toLocaleString()}đ</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs sm:text-sm border-t border-orange-100 pb-1.5 pt-2 font-black text-gray-850">
+                    <span>Dư nợ còn lại cần thu:</span>
+                    <span className="font-mono text-red-650 text-sm sm:text-base">{(selectedContract.totalPrice - selectedContract.paidAmount).toLocaleString()}đ</span>
+                  </div>
                 </div>
 
-                {/* Embedded Payment QR View */}
-                <div className="bg-amber-50/20 border-2 border-dashed border-amber-200/50 rounded-2xl p-3 sm:p-4 space-y-2.5">
-                  <div className="flex justify-between items-center pb-1.5 border-b border-amber-100/60 gap-1.5">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                      <span className="p-1 bg-amber-600 rounded-md text-white shrink-0">
-                        <QrCode className="w-3.5 h-3.5" />
-                      </span>
-                      <span className="font-bold text-[9px] sm:text-xs uppercase text-gray-800 tracking-wider font-sans truncate whitespace-nowrap">MÃ QR THANH TOÁN (VIETQR)</span>
-                      {selectedContract.status === 'Pending' && (
-                        <span className="bg-amber-600 text-white font-black text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full uppercase shrink-0 whitespace-nowrap tracking-wider shadow-2xs border border-amber-400">
-                          Cọc 50% giữ máy
-                        </span>
-                      )}
-                    </div>
+              {/* Payment QR Section */}
+              <div id="payment-qr-container" className="bg-orange-50/20 border border-orange-100 rounded-2xl p-3 sm:p-4.5 space-y-3 sm:space-y-3.5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center pb-2 border-b border-orange-100/50">
+                  <div className="flex items-center gap-1.5">
+                    <span className="p-1 bg-orange-600 rounded-lg text-white shrink-0">
+                      <QrCode className="w-4 h-4" />
+                    </span>
+                    <span className="font-extrabold text-[11px] sm:text-xs uppercase text-gray-850 tracking-wider">Chuyển khoản (VietQR)</span>
+                  </div>
+                  <div className="flex gap-1.5 justify-end">
+                    <button
+                      type="button"
+                      disabled={isExporting}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExportImage('payment-qr-container', `${selectedContract.contractCode}_qr_thanh_toan.png`);
+                      }}
+                      className="text-[9px] sm:text-[10px] text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer border border-emerald-250 bg-emerald-50 hover:bg-emerald-100 shadow-4xs px-2 py-0.5 rounded-md transition-all h-7"
+                    >
+                      <Download className="w-3 h-3" /> Xuất ảnh QR
+                    </button>
                     <button
                       type="button"
                       onClick={() => setShowBankSettings(!showBankSettings)}
-                      className="text-[9px] sm:text-[10px] text-gray-550 hover:text-gray-800 font-bold flex items-center gap-1 cursor-pointer border border-gray-250 bg-white shadow-4xs px-2 py-0.5 rounded-md h-6 shrink-0 whitespace-nowrap"
+                      className="text-[9px] sm:text-[10px] text-gray-650 hover:text-gray-800 font-bold flex items-center gap-1 hover:underline cursor-pointer border border-gray-200 bg-white shadow-3xs px-2 py-0.5 rounded-md h-7"
                     >
-                      <Settings className="w-2.5 h-2.5 shrink-0" /> {showBankSettings ? 'Ẩn cài đặt' : 'Cấu hình tài khoản'}
+                      <Settings className="w-3 h-3" /> {showBankSettings ? 'Thoát' : 'Cấu hình TK'}
                     </button>
                   </div>
+                </div>
 
-                  {showBankSettings ? (
-                    <div className="bg-white border border-gray-200 p-3 rounded-xl space-y-3 shadow-4xs">
-                      <h5 className="text-[11px] font-bold text-gray-800 flex justify-between items-center">
-                        <span>Cấu hình tài khoản nhận tiền</span>
-                        <span className="text-[9px] text-emerald-600 italic">Tự lưu trên trình duyệt</span>
-                      </h5>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Ngân hàng thụ hưởng</label>
-                          <select
-                            value={bankConfig.bankId}
-                            onChange={(e) => handleUpdateBankConfig({ ...bankConfig, bankId: e.target.value })}
-                            className="w-full border border-gray-200 rounded-md p-1.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-orange-500"
-                          >
-                            {VIET_BANKS.map(b => (
-                              <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Số tài khoản nhận</label>
-                          <input
-                            type="text"
-                            value={bankConfig.accountNo}
-                            onChange={(e) => handleUpdateBankConfig({ ...bankConfig, accountNo: e.target.value.replace(/\s+/g, '') })}
-                            className="w-full border border-gray-200 rounded-md p-1.5 text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                            placeholder="Nhập số tài khoản"
-                          />
-                        </div>
+                {showBankSettings ? (
+                  <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-xl space-y-3 shadow-3xs">
+                    <h5 className="text-[11px] sm:text-xs font-bold text-gray-800 flex justify-between items-center">
+                      <span>Cấu hình tài khoản nhận tiền</span>
+                      <span className="text-[9px] sm:text-[10px] text-emerald-600 font-mono italic">Lưu tự động vào trình duyệt</span>
+                    </h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] sm:text-[10px] font-bold text-gray-500 mb-1">Ngân hàng thụ hưởng</label>
+                        <select
+                          value={bankConfig.bankId}
+                          onChange={(e) => handleUpdateBankConfig({ ...bankConfig, bankId: e.target.value })}
+                          className="w-full border border-gray-200 rounded-lg p-2 text-xs font-semibold focus:ring-2 focus:ring-orange-500/20 focus:outline-none"
+                        >
+                          {VIET_BANKS.map(b => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Tên chủ tài khoản (KÍ TỰ IN HOA KHÔNG DẤU)</label>
+                        <label className="block text-[9px] sm:text-[10px] font-bold text-gray-500 mb-1">Số tài khoản (Số thẻ/số TK)</label>
                         <input
                           type="text"
-                          value={bankConfig.accountName}
-                          onChange={(e) => handleUpdateBankConfig({ ...bankConfig, accountName: e.target.value.toUpperCase() })}
-                          className="w-full border border-gray-250 rounded-md p-1.5 text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                          placeholder="VD: NGUYEN VAN HAI"
+                          value={bankConfig.accountNo}
+                          onChange={(e) => handleUpdateBankConfig({ ...bankConfig, accountNo: e.target.value.replace(/\s+/g, '') })}
+                          className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono font-bold text-gray-800 focus:ring-2 focus:ring-orange-500/20 focus:outline-none"
+                          placeholder="Nhập số tài khoản nhận tiền"
                         />
                       </div>
                     </div>
-                  ) : (
-                    <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-                      {/* Bank Details text */}
-                      <div className="flex-1 flex flex-col justify-center text-xs sm:text-sm text-gray-750 space-y-1.5 p-2 rounded-xl bg-amber-50/10 border border-amber-100">
-                        <p className="flex justify-between items-center border-b border-gray-100 pb-1 gap-2">
-                          <span className="text-gray-500 font-sans text-[10px] sm:text-xs">Ngân hàng:</span>
-                          <span className="font-bold text-gray-800 font-sans shrink-0 whitespace-nowrap">{bankConfig.bankId}</span>
-                        </p>
-                        <p className="flex justify-between items-center border-b border-gray-100 pb-1 gap-2">
-                          <span className="text-gray-500 font-sans text-[10px] sm:text-xs">Số tài khoản:</span>
-                          <span className="font-bold text-gray-905 select-all font-sans shrink-0 whitespace-nowrap">{bankConfig.accountNo}</span>
-                        </p>
-                        <p className="flex justify-between items-center border-b border-gray-100 pb-1 gap-2">
-                          <span className="text-gray-500 font-sans text-[10px] sm:text-xs">Chủ tài khoản:</span>
-                          <span className="font-bold text-gray-800 font-sans shrink-0 whitespace-nowrap">{bankConfig.accountName}</span>
-                        </p>
-                        <p className="flex justify-between items-center border-b border-gray-100 pb-1 gap-2">
-                          <span className="font-semibold text-amber-800 text-[10px] sm:text-xs">
-                            {selectedContract.status === 'Pending' ? "Cọc trước 50% giữ máy:" : "Số tiền thanh toán còn lại:"}
-                          </span>
-                          <span className="font-bold text-rose-600 text-sm font-sans shrink-0 whitespace-nowrap">
-                            {(selectedContract.status === 'Pending' ? selectedContract.paidAmount : (selectedContract.totalPrice - selectedContract.paidAmount)).toLocaleString()}đ
-                          </span>
-                        </p>
-                        <div className="pt-0.5">
-                          <span className="text-amber-850 font-bold bg-amber-50 text-[10px] sm:text-[11px] px-2 py-1 rounded border border-amber-200 block truncate font-sans">
-                            Nội dung ck: <span className="underline select-all">{selectedContract.contractCode} {selectedContract.status === 'Pending' ? "coc giu cho" : "thanh toan"}</span>
-                          </span>
+                    <div>
+                      <label className="block text-[9px] sm:text-[10px] font-bold text-gray-500 mb-1">Tên chủ tài khoản (KHÔNG DẤU, IN HOA)</label>
+                      <input
+                        type="text"
+                        value={bankConfig.accountName}
+                        onChange={(e) => handleUpdateBankConfig({ ...bankConfig, accountName: e.target.value.toUpperCase() })}
+                        className="w-full border border-gray-200 rounded-lg p-2 text-xs font-bold text-gray-800 focus:ring-2 focus:ring-orange-500/20 focus:outline-none"
+                        placeholder="VD: NGUYEN VAN HAI"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col lg:flex-row gap-4 items-stretch">
+                    {/* Bank Information Details */}
+                    <div className="flex-1 space-y-3 flex flex-col justify-center">
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block mb-1">Thông tin chuyển tiền:</span>
+                        <div className="bg-white/80 p-3 sm:p-4 rounded-xl border border-orange-100/60 font-mono text-xs text-gray-750 space-y-2 select-all relative group shadow-4xs leading-relaxed">
+                          <p className="flex justify-between border-b border-gray-100/60 pb-1.5"><span className="text-gray-400 text-[10px] sm:text-[11px] font-sans">Ngân hàng:</span> <span className="font-bold text-gray-850">{bankConfig.bankId}</span></p>
+                          <p className="flex justify-between border-b border-gray-100/60 pb-1.5"><span className="text-gray-400 text-[10px] sm:text-[11px] font-sans">Số tài khoản:</span> <span className="font-bold text-gray-900 select-all">{bankConfig.accountNo}</span></p>
+                          <p className="flex justify-between border-b border-gray-100/60 pb-1.5"><span className="text-gray-400 text-[10px] sm:text-[11px] font-sans">Tên thụ hưởng:</span> <span className="font-bold text-gray-850">{bankConfig.accountName}</span></p>
+                          <p className="flex justify-between border-b border-gray-100/60 pb-1.5 pt-0.5"><span className="text-gray-400 text-[10px] sm:text-[11px] font-sans font-bold text-orange-700">Số tiền cần chuyển:</span> <span className="font-bold text-rose-600 text-sm sm:text-base">{(selectedContract.totalPrice - selectedContract.paidAmount).toLocaleString()}đ</span></p>
+                          <div className="pt-1">
+                            <span className="text-orange-700 font-bold bg-orange-50 text-[10px] sm:text-[11px] px-2.5 py-1.5 rounded-lg border border-orange-200 block truncate" title="Nội dung chuyển khoản">
+                              Nội dung ck: <span className="underline select-all">{selectedContract.contractCode} thanh toan</span>
+                            </span>
+                          </div>
                         </div>
-                      </div>
-
-                      {/* QR Display */}
-                      <div className="w-[220px] self-center bg-white p-2.5 rounded-xl border border-amber-100 flex flex-col items-center justify-center shrink-0 shadow-3xs">
-                        <div className="relative border border-dashed border-amber-200 p-1 bg-white rounded-lg">
-                          {isQrLoading ? (
-                            <div className="w-[180px] h-[180px] flex items-center justify-center bg-gray-50 rounded-md">
-                              <span className="text-[11px] text-gray-400 font-sans animate-pulse">Nạp QR...</span>
-                            </div>
-                          ) : (
-                            <img
-                              src={qrDataUrl || (`https://img.vietqr.io/image/${bankConfig.bankId}-${bankConfig.accountNo}-compact2.png?amount=${selectedContract.status === 'Pending' ? selectedContract.paidAmount : (selectedContract.totalPrice - selectedContract.paidAmount)}&addInfo=${encodeURIComponent(selectedContract.contractCode + (selectedContract.status === 'Pending' ? " coc giu cho" : " thanh toan"))}&accountName=${encodeURIComponent(bankConfig.accountName)}`)}
-                              alt="VietQR code"
-                              className="w-[180px] h-[180px] object-contain transition-all duration-200"
-                              referrerPolicy="no-referrer"
-                              crossOrigin="anonymous"
-                            />
-                          )}
-                        </div>
-                        <span className="text-[9px] text-orange-600 font-bold mt-1.5 uppercase block tracking-wider font-sans text-center">
-                          {selectedContract.status === 'Pending' ? "Quét cọc 50% giữ máy" : "Quét thanh toán còn lại"}
-                        </span>
                       </div>
                     </div>
-                  )}
-                </div>
+
+                    {/* QR Code image loaded from VietQR API - significantly larger */}
+                    <div className="w-full lg:w-[220px] bg-white p-3.5 rounded-2xl border border-orange-100/60 flex flex-col items-center justify-center shrink-0 shadow-3xs">
+                      <div className="relative border-2 border-dashed border-orange-200/50 p-1.5 bg-white rounded-xl select-all">
+                        <img
+                           src={`https://img.vietqr.io/image/${bankConfig.bankId}-${bankConfig.accountNo}-compact2.png?amount=${
+                            selectedContract.totalPrice - selectedContract.paidAmount
+                          }&addInfo=${encodeURIComponent(selectedContract.contractCode + " thanh toan")}&accountName=${encodeURIComponent(bankConfig.accountName)}`}
+                          alt="VietQR code"
+                          className="w-[150px] h-[150px] object-contain transition-all duration-200 hover:scale-105"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
+                        />
+                      </div>
+                      <span className="text-[8px] text-gray-400 font-bold mt-2 font-mono text-center leading-tight">QUÉT QR ĐỂ CHUYỂN KHOẢN NHANH</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {selectedContract.note && (
                 <div className="text-xs sm:text-sm">
                   <span className="font-bold text-gray-700">Yêu cầu đặc biệt bổ sung:</span>
-                  <p className="bg-amber-50/40 p-2.5 rounded border border-amber-100 text-xs text-gray-600 mt-1 italic font-sans">{selectedContract.note}</p>
+                  <p className="bg-amber-50/40 p-2.5 rounded border border-amber-100 text-xs text-gray-600 mt-1 italic font-mono">{selectedContract.note}</p>
                 </div>
               )}
+              </div>
 
               {/* Status Update Quick Controls */}
               <div className="border-t border-gray-150 pt-4 space-y-3 shrink-0">
@@ -1492,6 +1295,101 @@ export default function ContractManager({
             </div>
 
             <form onSubmit={handleCreateContract} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Quick Load Template Section */}
+              <div className="bg-orange-50/45 p-3.5 rounded-xl border border-orange-100/50 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-orange-950 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                    📋 Chọn mẫu đơn đặt thuê nhanh:
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-mono italic">Tự động điền</span>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {allTemplates.map((tpl) => (
+                      <div 
+                        key={tpl.id} 
+                        className="flex items-center justify-between bg-white hover:bg-orange-50/50 border border-gray-150 hover:border-orange-200/80 p-2.5 rounded-xl cursor-pointer transition-all shadow-4xs group"
+                        onClick={() => handleApplyTemplate(tpl)}
+                      >
+                        <div className="flex-1 min-w-0 pr-2">
+                          <p className="text-xs font-extrabold text-gray-850 truncate group-hover:text-orange-650 transition-colors">
+                            {tpl.templateName}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                            Khách: <strong className="text-gray-700">{tpl.customerName}</strong> • {tpl.selectedCameraIds.length} thiết bị • {tpl.is6Hours ? 'Thuê 6h' : 'Bằng ngày'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {tpl.id.startsWith('tpl-custom-') && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteCustomTemplate(tpl.id, e)}
+                              className="text-gray-400 hover:text-red-650 p-1 rounded-lg transition-colors cursor-pointer"
+                              title="Xóa mẫu tự chọn này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <span className="text-[10px] font-bold bg-orange-100 text-orange-850 px-2.5 py-1 rounded-lg border border-orange-150/50 group-hover:bg-orange-650 group-hover:text-white transition-all">
+                            Áp dụng
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Save current inputs as a Template */}
+                  <div className="border-t border-orange-100/50 pt-2 flex flex-col gap-2">
+                    {!showSaveTemplateForm ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newContractForm.customerName || newContractForm.selectedCameraIds.length === 0) {
+                            setCustomAlertMessage('Vui lòng điền thông tin họ tên khách thuê và chọn ít nhất 1 thiết bị trước khi lưu mẫu đơn thuê!');
+                            return;
+                          }
+                          setShowSaveTemplateForm(true);
+                        }}
+                        className="text-[11px] text-orange-755 hover:text-orange-900 font-bold flex items-center justify-center gap-1.5 hover:underline py-1.5 bg-white rounded-lg border border-orange-150 border-dashed cursor-pointer"
+                      >
+                        💾 Tạo mẫu đơn thuê mới từ thông tin hiện tại
+                      </button>
+                    ) : (
+                      <div className="bg-white border border-orange-150 rounded-xl p-2.5 space-y-2">
+                        <label className="block text-[10px] font-bold text-gray-600">Nhập tên cho mẫu đơn thuê mới:</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newTemplateName}
+                            onChange={(e) => setNewTemplateName(e.target.value)}
+                            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="VD: Gói Wedding Sự Kiện R50"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveAsTemplate}
+                            className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-3 py-1 rounded-lg cursor-pointer"
+                          >
+                            Lưu mẫu
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSaveTemplateForm(false);
+                              setNewTemplateName('');
+                            }}
+                            className="bg-gray-100 text-gray-600 text-xs px-2.5 py-1 rounded-lg hover:bg-gray-200 cursor-pointer"
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Họ tên khách hàng *</label>
@@ -1522,21 +1420,10 @@ export default function ContractManager({
                   <label className="block text-xs font-bold text-gray-700 mb-1">Loại cọc thế chấp</label>
                   <select
                     value={newContractForm.customerDocType}
-                    onChange={e => {
-                      const val = e.target.value as any;
-                      const nextData = { ...newContractForm, customerDocType: val };
-                      if (val === 'CCCD_And_1M') {
-                        nextData.depositAmount = 1000000;
-                        if (!newContractForm.customerDocNote || newContractForm.customerDocNote === 'Giữ CCCD gốc') {
-                          nextData.customerDocNote = 'Giữ CCCD gốc + 1.000.000đ';
-                        }
-                      }
-                      setNewContractForm(nextData);
-                    }}
+                    onChange={e => setNewContractForm({ ...newContractForm, customerDocType: e.target.value as any })}
                     className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none bg-white font-medium text-gray-700"
                   >
                     <option value="CCCD">Giữ căn cước (CCCD)</option>
-                    <option value="CCCD_And_1M">Giữ căn cước (CCCD) và 1 triệu đồng</option>
                     <option value="GPLX">Giữ bằng lái (GPLX)</option>
                     <option value="Passport">Giữ hộ chiếu (Passport)</option>
                     <option value="CashDeposit">Đặt cọc tiền mặt</option>
@@ -1706,20 +1593,9 @@ export default function ContractManager({
                     className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none font-mono"
                     placeholder="VD: 5000000"
                   />
-                  {calculatedRecommendedDeposit > 0 && (
-                    <div className="mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setNewContractForm({ ...newContractForm, depositAmount: calculatedRecommendedDeposit })}
-                        className="text-[10px] text-amber-700 hover:text-amber-800 bg-amber-50/55 hover:bg-amber-100 border border-amber-200/50 px-1.5 py-0.5 rounded-md font-bold transition-all cursor-pointer inline-block text-left"
-                      >
-                        💡 Cọc đề xuất: {calculatedRecommendedDeposit.toLocaleString()}đ
-                      </button>
-                    </div>
-                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Cọc giữ máy trước (VND)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Trả trước (Tiền đặt cọc thuê - VND)</label>
                   <input
                     type="number"
                     value={newContractForm.paidAmount || ''}
@@ -1727,35 +1603,31 @@ export default function ContractManager({
                     className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none font-mono"
                     placeholder="VD: 500000"
                   />
-                  <div className="flex gap-2 mt-1.5">
+                  <div className="flex gap-1.5 mt-1.5">
                     <button
                       type="button"
                       onClick={() => setNewContractForm({ ...newContractForm, paidAmount: Math.round(calculatedTotal * 0.5) })}
-                      className={`flex-1 text-[11px] font-bold py-1.5 px-2 rounded-lg border transition-all cursor-pointer text-center ${
-                        newContractForm.paidAmount === Math.round(calculatedTotal * 0.5)
-                          ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-xs font-extrabold'
-                          : 'bg-amber-50/50 hover:bg-amber-100/70 text-amber-800 border-amber-200'
-                      }`}
+                      className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold py-1 px-1 rounded-lg border border-amber-200 transition-all cursor-pointer text-center"
                       title="Thu trước 50% tiền thuê làm cọc giữ chỗ"
                     >
                       Cọc 50% ({(Math.round(calculatedTotal * 0.5)).toLocaleString()}đ)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setNewContractForm({ ...newContractForm, paidAmount: 0 })}
-                      className={`flex-1 text-[11px] font-bold py-1.5 px-2 rounded-lg border transition-all cursor-pointer text-center ${
-                        newContractForm.paidAmount === 0
-                          ? 'bg-gray-200 border-gray-400 text-gray-800 shadow-xs font-extrabold'
-                          : 'bg-gray-50 hover:bg-gray-150 text-gray-700 border-gray-200'
-                      }`}
-                      title="Không thu cọc giữ máy"
+                      onClick={() => setNewContractForm({ ...newContractForm, paidAmount: calculatedTotal })}
+                      className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold py-1 px-1 rounded-lg border border-emerald-200 transition-all cursor-pointer text-center"
+                      title="Thu trước 100% tiền thuê"
                     >
-                      Không cọc (0đ)
+                      Cọc 100% ({calculatedTotal.toLocaleString()}đ)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewContractForm({ ...newContractForm, paidAmount: 0 })}
+                      className="bg-gray-50 hover:bg-gray-150 text-gray-700 text-[10px] font-bold py-1 px-2 rounded-lg border border-gray-200 transition-all cursor-pointer text-center"
+                    >
+                      0đ
                     </button>
                   </div>
-                  <span className="text-[10px] text-orange-600 font-medium block mt-2 bg-orange-50/50 border border-orange-100/50 p-1.5 rounded-lg leading-relaxed">
-                    💡 <b>Quy định:</b> Đặt lịch cọc trước 50% tiền thuê, hoặc chọn Không cọc nếu khách quen thanh toán khi trả máy.
-                  </span>
                 </div>
               </div>
 
