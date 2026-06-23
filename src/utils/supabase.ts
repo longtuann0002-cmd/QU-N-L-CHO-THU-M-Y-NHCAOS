@@ -20,12 +20,18 @@ import {
 
 /** Boolean cho phep dung nhu `if (isSupabaseConfigured)` */
 export const isSupabaseConfigured: boolean = _isConfigured();
+if (!isSupabaseConfigured) {
+  console.warn('[supabase-compat] Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+}
 
 /**
  * Dong bo mot bang du lieu len Supabase.
  */
 export async function syncToSupabase(table: string, data: any[]): Promise<void> {
-  if (!isSupabaseConfigured) return;
+  if (!isSupabaseConfigured) {
+    console.warn(`[supabase-compat] Skipping sync for ${table} because Supabase is not configured.`);
+    return;
+  }
   try {
     switch (table) {
       case 'cameras':

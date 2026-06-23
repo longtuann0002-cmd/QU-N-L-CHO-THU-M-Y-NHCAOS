@@ -205,6 +205,13 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      addToast('Supabase chưa cấu hình. Dữ liệu chỉ lưu cục bộ.', 'warning');
+      console.warn('[App] Supabase disabled because VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing.');
+    }
+  }, []);
+
   // Logo & Branding customization states
   const [logoText, setLogoText] = useState<string>(() =>
     loadStoredData('logoText', 'TIỆM ẢNH NHÀ CAOS')
