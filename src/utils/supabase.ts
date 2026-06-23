@@ -1,80 +1,85 @@
-import { createClient } from '@supabase/supabase-js';
+/**
+ * utils/supabase.ts - Compatibility shim
+ * Cung cap API cu (syncToSupabase, fetchFromSupabase, isSupabaseConfigured)
+ * bang cach dung lai lib/db.ts va lib/supabase.ts hien tai.
+ */
 
-// Retrieve Supabase environment credentials using safe typing
-const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = metaEnv.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+import { isSupabaseConfigured as _isConfigured } from '../lib/supabase';
+import {
+  fetchCameras,
+  fetchContracts,
+  fetchCustomers,
+  fetchExpenses,
+  upsertCameras,
+  upsertContracts,
+  upsertCustomers,
+  upsertExpenses,
+  saveSetting,
+  loadSetting,
+} from '../lib/db';
 
-// Safely evaluate if Supabase is properly configured in settings
-export const isSupabaseConfigured = !!(
-  supabaseUrl && 
-  supabaseAnonKey && 
-  supabaseUrl !== 'YOUR_SUPABASE_URL' &&
-  !supabaseUrl.toLowerCase().includes('placeholder') &&
-  supabaseUrl.startsWith('https://')
-);
-
-// Initialize Supabase client
-export const supabase = isSupabaseConfigured 
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
-
+/** Boolean cho phep dung nhu `if (isSupabaseConfigured)` */
+export const isSupabaseConfigured: boolean = _isConfigured();
 
 /**
- * Synchronize data state to Supabase cloud database
- * @param key LocalStorage matched key
- * @param data Array or Object data block to serialize
- * @returns Success status indicator
+ * Dong bo mot bang du lieu len Supabase.
  */
-export async function syncToSupabase(key: string, data: any): Promise<boolean> {
-  if (!supabase) return false;
+export async function syncToSupabase(table: string, data: any[]): Promise<void> {
+  if (!isSupabaseConfigured) return;
   try {
-    const { error } = await supabase
-      .from('camlease_store')
-      .upsert(
-        { 
-          key, 
-          value: JSON.stringify(data), 
-          updated_at: new Date().toISOString() 
-        }, 
-        { onConflict: 'key' }
-      );
-    
-    if (error) {
-      console.warn(`[Supabase] Sync failed for "${key}":`, error.message);
-      return false;
+    switch (table) {
+      case 'cameras':
+        await upsertCameras(data);
+        break;
+      case 'contracts':
+        await upsertContracts(data);
+        break;
+      case 'customers':
+        await upsertCustomers(data);
+        break;
+      case 'expenses':
+        await upsertExpenses(data);
+        break;
+      case 'registeredUsers':
+        await saveSetting('registeredUsers', data);
+        break;
+      case 'camlease_snapshots':
+        await saveSetting('camlease_snapshots', data);
+        break;
+      default:
+        await saveSetting(table, data);
+        break;
     }
-    return true;
   } catch (err) {
-    console.error(`[Supabase] Exception syncing "${key}":`, err);
-    return false;
+    console.error('[supabase-compat] syncToSupabase(' + table + ') error:', err);
   }
 }
 
 /**
- * Fetch synchronized data state from Supabase cloud database
- * @param key LocalStorage matched key
- * @returns Parsed JSON data or null if empty/unavailable
+ * Tai du lieu tu Supabase theo ten bang.
+ * Tra ve null neu that bai (App.tsx kiem tra falsy de fallback localStorage).
  */
-export async function fetchFromSupabase(key: string): Promise<any | null> {
-  if (!supabase) return null;
+export async function fetchFromSupabase(table: string): Promise<any[] | null> {
+  if (!isSupabaseConfigured) return null;
   try {
-    const { data, error } = await supabase
-      .from('camlease_store')
-      .select('value')
-      .eq('key', key)
-      .maybeSingle(); // Prevents throwing 406 on no records found
-    
-    if (error) {
-      console.warn(`[Supabase] Fetch failed for "${key}":`, error.message);
-      return null;
-    }
-    
-    if (data && data.value) {
-      return JSON.parse(data.value);
+    switch (table) {
+      case 'cameras':
+        return await fetchCameras();
+      case 'contracts':
+        return await fetchContracts();
+      case 'customers':
+        return await fetchCustomers();
+      case 'expenses':
+        return await fetchExpenses();
+      case 'registeredUsers':
+        return await loadSetting<any[]>('registeredUsers', []);
+      case 'camlease_snapshots':
+        return await loadSetting<any[]>('camlease_snapshots', []);
+      default:
+        return await loadSetting<any[]>(table, []);
     }
   } catch (err) {
-    console.error(`[Supabase] Exception fetching "${key}":`, err);
+    console.error('[supabase-compat] fetchFromSupabase(' + table + ') error:', err);
+    return null;
   }
-  return null;
 }

@@ -126,8 +126,8 @@ export default function EquipmentTracker({
       dailyRate: cam.dailyRate,
       price6Hours: cam.price6Hours ?? Math.round(cam.dailyRate * 0.6),
       price1Day: cam.price1Day ?? cam.dailyRate,
-      price2Days: Math.round((cam.price2Days ?? Math.round(cam.dailyRate * 0.9)) * 2),
-      price3Days: Math.round((cam.price3Days ?? Math.round(cam.dailyRate * 0.8)) * 3),
+      price2Days: (cam.price2Days ?? Math.round(cam.dailyRate * 0.9)) * 2,
+      price3Days: (cam.price3Days ?? Math.round(cam.dailyRate * 0.8)) * 3,
       price4DaysPlus: cam.price4DaysPlus ?? Math.round(cam.dailyRate * 0.7),
       status: cam.status,
       serialNumber: cam.serialNumber,
@@ -147,11 +147,11 @@ export default function EquipmentTracker({
 
     const imageRef = formState.image || 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=400';
     
-    // Chia 2 cho giá ngày thứ 2, chia 3 cho ngày thứ 3 để có đơn giá/ngày đúng (giữ số thập phân chính xác tuyệt đối thay vì làm tròn)
+    // Chia 2 cho giá ngày thứ 2, chia 3 cho ngày thứ 3 để có đơn giá/ngày đúng
     const savedFormState = {
       ...formState,
-      price2Days: formState.price2Days / 2,
-      price3Days: formState.price3Days / 3
+      price2Days: Math.round(formState.price2Days / 2),
+      price3Days: Math.round(formState.price3Days / 3)
     };
 
     if (editingCamera) {
@@ -236,44 +236,44 @@ export default function EquipmentTracker({
       />
 
       {/* Search and filter tools */}
-      <div className="bg-white border border-gray-150 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 sm:space-y-4">
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-base sm:text-xl font-black text-gray-850 flex items-center gap-2 select-none">
-              <CameraIcon className="text-orange-600 w-4.5 h-4.5 sm:w-5 bg-orange-50 p-1 rounded-md sm:bg-transparent sm:p-0" /> Quản Lý Đội Thiết Bị (Kho Máy)
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <CameraIcon className="text-orange-600" /> Quản Lý Đội Thiết Bị (Kho Máy)
             </h2>
-            <p className="text-xs sm:text-sm text-gray-500 leading-normal">
+            <p className="text-sm text-gray-500">
               Kiểm tra theo dõi tình trạng thiết bị máy ảnh, ống kính và bảo trì định kỳ tránh hư hại.
             </p>
           </div>
-          <div className={`grid ${currentUserRole === 'admin' ? 'grid-cols-2' : 'grid-cols-1'} sm:flex sm:flex-wrap gap-2 w-full sm:w-auto`}>
+          <div className="flex flex-wrap gap-2 self-start md:self-auto">
             <button
               onClick={handleExportCSV}
-              className="bg-slate-50 border border-gray-200 text-gray-700 font-extrabold sm:font-semibold px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm flex items-center justify-center gap-1.5 hover:bg-slate-100 hover:text-gray-900 transition-all cursor-pointer shadow-4xs"
+              className="bg-slate-50 border border-gray-205 text-gray-700 font-semibold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 hover:bg-slate-100 hover:text-gray-900 transition-colors cursor-pointer"
               title="Xuất định dạng CSV tải về"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Xuất bản CSV
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Xuất báo cáo CSV
             </button>
             {currentUserRole === 'admin' && (
               <button
                 onClick={handleOpenAddModal}
-                className="bg-orange-600 text-white font-extrabold sm:font-medium px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm flex items-center justify-center gap-1.5 hover:bg-orange-700 transition-all cursor-pointer shadow-2xs"
+                className="bg-orange-600 text-white font-medium px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 hover:bg-orange-700 transition-colors cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Thêm thiết bị
+                <Plus className="w-4 h-4" /> Thêm thiết bị mới
               </button>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 sm:top-3 h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <input
               type="text"
               placeholder="Tìm theo tên máy, số serial, viết tắt..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-8.5 pr-4 py-1.5 sm:py-2.5 text-xs sm:text-sm w-full border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-400/80"
+              className="pl-9 pr-4 py-2 text-sm w-full border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none"
             />
           </div>
 
@@ -411,11 +411,11 @@ export default function EquipmentTracker({
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 font-medium">Thuê 2 ngày:</span>
-                      <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
+                      <span className="font-mono text-gray-800 font-bold">{((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 font-medium">Thuê 3 ngày:</span>
-                      <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
+                      <span className="font-mono text-gray-800 font-bold">{((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 font-medium">Từ 4 ngày:</span>
@@ -460,11 +460,11 @@ export default function EquipmentTracker({
                       </div>
                       <div className="flex justify-between items-center px-1">
                         <span className="text-gray-500">Thuê 2 ngày:</span>
-                        <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
+                        <span className="font-mono text-gray-800 font-bold">{((cam.price2Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.9)) * 2).toLocaleString()}đ</span>
                       </div>
                       <div className="flex justify-between items-center px-1">
                         <span className="text-gray-500">Thuê 3 ngày:</span>
-                        <span className="font-mono text-gray-800 font-bold">{Math.round((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
+                        <span className="font-mono text-gray-800 font-bold">{((cam.price3Days ?? Math.round((cam.price1Day ?? cam.dailyRate) * 0.8)) * 3).toLocaleString()}đ</span>
                       </div>
                       <div className="flex justify-between items-center px-1">
                         <span className="text-gray-500">Từ 4 ngày:</span>

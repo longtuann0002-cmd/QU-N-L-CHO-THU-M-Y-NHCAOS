@@ -17,7 +17,8 @@ import {
   Info,
   ExternalLink,
   Sliders,
-  DollarSign
+  DollarSign,
+  RefreshCw
 } from 'lucide-react';
 
 interface NotificationCenterProps {
@@ -26,6 +27,8 @@ interface NotificationCenterProps {
   onUpdateContractStatus: (id: string, status: ContractStatus, note?: string, paidAmount?: number) => void;
   systemDate: string;
   setSystemDate: (date: string) => void;
+  isDateSimulated?: boolean;
+  onResetSystemDate?: () => void;
 }
 
 export default function NotificationCenter({
@@ -33,7 +36,9 @@ export default function NotificationCenter({
   cameras,
   onUpdateContractStatus,
   systemDate,
-  setSystemDate
+  setSystemDate,
+  isDateSimulated = false,
+  onResetSystemDate
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -225,17 +230,17 @@ export default function NotificationCenter({
       <button
         id="notification-bell-btn"
         onClick={() => setIsOpen(true)}
-        className={`relative p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl border transition-all cursor-pointer ${
+        className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${
           stats.total > 0
             ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100 hover:border-amber-300 animate-pulse'
             : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 shadow-3xs'
         }`}
         title="Thông báo nhắc nhở vận hành hôm nay"
       >
-        <Bell className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+        <Bell className="w-5 h-5 shrink-0" />
         {/* Floating count badge */}
         {stats.total > 0 && (
-          <span className="absolute -top-1 -right-1 sm:-top-1.5 sm:-right-1.5 bg-rose-600 text-white font-mono text-[8px] sm:text-[9px] font-extrabold w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full border border-white sm:border-2 animate-scale-up">
+          <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-mono text-[9px] font-extrabold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white animate-scale-up">
             {stats.total}
           </span>
         )}
@@ -317,8 +322,8 @@ export default function NotificationCenter({
 
                   <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
                     {/* System Today Selector widget */}
-                    <div className="flex items-center gap-1.5 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200/60 font-medium shrink-0">
-                      <span className="text-[10px] text-gray-500 shrink-0">Ngày hệ thống:</span>
+                    <div className="flex items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-lg border border-gray-200/60 font-medium shrink-0">
+                      <span className="text-[10px] text-gray-500 shrink-0">Giả lập ngày:</span>
                       <input
                         type="date"
                         value={systemDate}
@@ -326,6 +331,16 @@ export default function NotificationCenter({
                         className="bg-transparent border-0 p-0 text-xs text-gray-950 font-bold focus:ring-0 uppercase cursor-pointer"
                         title="Thay đổi ngày hiện tại để kiểm tra thông báo nhắc nhở ngày khác"
                       />
+                      {isDateSimulated && onResetSystemDate && (
+                        <button
+                          type="button"
+                          onClick={onResetSystemDate}
+                          className="p-0.5 text-orange-600 hover:text-orange-800 hover:bg-orange-100/50 rounded transition shrink-0 ml-0.5 cursor-pointer flex items-center justify-center"
+                          title="Quay lại ngày thực tế"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
 
                     <button
@@ -489,7 +504,7 @@ export default function NotificationCenter({
                                   📷 {it.cameraName}
                                 </span>
                                 <span className="font-mono text-gray-500 text-[10px]">
-                                  ({it.quantity} chiếc) • {Math.round(it.dailyRate).toLocaleString()}đ/ngày
+                                  ({it.quantity} chiếc) • {(it.dailyRate).toLocaleString()}đ/ngày
                                 </span>
                               </div>
                             ))}
