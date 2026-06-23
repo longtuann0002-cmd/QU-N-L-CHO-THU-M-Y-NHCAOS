@@ -339,23 +339,31 @@ export default function App() {
           const cloudUsers = await fetchFromSupabase('registeredUsers');
           const cloudSnapshots = await fetchFromSupabase('camlease_snapshots');
 
-          if (cloudCameras) setCameras(cloudCameras);
-          if (cloudContracts) setContracts(cloudContracts);
-          if (cloudCustomers) setCustomers(cloudCustomers);
-          if (cloudExpenses) setExpenses(cloudExpenses);
-          if (cloudUsers) setRegisteredUsers(cloudUsers);
-          if (cloudSnapshots) setSnapshots(cloudSnapshots);
+          const hasCloudCameras = Array.isArray(cloudCameras) && cloudCameras.length > 0;
+          const hasCloudContracts = Array.isArray(cloudContracts) && cloudContracts.length > 0;
+          const hasCloudCustomers = Array.isArray(cloudCustomers) && cloudCustomers.length > 0;
+          const hasCloudExpenses = Array.isArray(cloudExpenses) && cloudExpenses.length > 0;
+          const hasCloudUsers = Array.isArray(cloudUsers) && cloudUsers.length > 0;
+          const hasCloudSnapshots = Array.isArray(cloudSnapshots) && cloudSnapshots.length > 0;
 
-          if (cloudCameras || cloudContracts || cloudCustomers || cloudExpenses) {
-            // Synchronized successfully, no toast notification displayed
-          } else {
-            console.log('[Supabase] Initializing store seed records on cloud');
-            await syncToSupabase('cameras', cameras);
-            await syncToSupabase('contracts', contracts);
-            await syncToSupabase('customers', customers);
-            await syncToSupabase('expenses', expenses);
-            await syncToSupabase('registeredUsers', registeredUsers);
-            await syncToSupabase('camlease_snapshots', snapshots);
+          if (hasCloudCameras) setCameras(cloudCameras as Camera[]);
+          if (hasCloudContracts) setContracts(cloudContracts as RentalContract[]);
+          if (hasCloudCustomers) setCustomers(cloudCustomers as Customer[]);
+          if (hasCloudExpenses) setExpenses(cloudExpenses as Expense[]);
+          if (hasCloudUsers) setRegisteredUsers(cloudUsers);
+          if (hasCloudSnapshots) setSnapshots(cloudSnapshots);
+
+          const seedTasks: Promise<void>[] = [];
+          if (!hasCloudCameras && cameras.length > 0) seedTasks.push(syncToSupabase('cameras', cameras));
+          if (!hasCloudContracts && contracts.length > 0) seedTasks.push(syncToSupabase('contracts', contracts));
+          if (!hasCloudCustomers && customers.length > 0) seedTasks.push(syncToSupabase('customers', customers));
+          if (!hasCloudExpenses && expenses.length > 0) seedTasks.push(syncToSupabase('expenses', expenses));
+          if (!hasCloudUsers && registeredUsers.length > 0) seedTasks.push(syncToSupabase('registeredUsers', registeredUsers));
+          if (!hasCloudSnapshots && snapshots.length > 0) seedTasks.push(syncToSupabase('camlease_snapshots', snapshots));
+
+          if (seedTasks.length > 0) {
+            console.log('[Supabase] Seeding missing cloud data from local store');
+            await Promise.all(seedTasks);
           }
         } catch (err) {
           console.error('[Supabase] Sync boot error, falling back locally', err);
