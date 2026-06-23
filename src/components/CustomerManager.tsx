@@ -167,41 +167,41 @@ export default function CustomerManager({
   return (
     <div className="space-y-6">
       {/* Search Header */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+      <div className="bg-white border border-gray-150 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 sm:space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <User className="text-orange-600" /> Quản Lý Khách Hàng Thuê Máy
+          <div className="space-y-1">
+            <h2 className="text-base sm:text-xl font-black text-gray-850 flex items-center gap-2 select-none">
+              <User className="text-orange-600 w-4.5 h-4.5 sm:w-5 bg-orange-50 p-1 rounded-md sm:bg-transparent sm:p-0" /> Quản Lý Khách Hàng Thuê Máy
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-xs sm:text-sm text-gray-500 leading-normal">
               Tra cứu hồ sơ khách hàng, xếp hạng độ tin cậy để quyết định mức độ thế chấp hoặc cọc thế chấp.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
             <button
               onClick={handleExportCSV}
-              className="bg-slate-50 border border-gray-205 text-gray-700 font-semibold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 hover:bg-slate-100 hover:text-gray-900 transition-colors cursor-pointer"
+              className="bg-slate-50 border border-gray-200 text-gray-700 font-extrabold sm:font-semibold px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm flex items-center justify-center gap-1.5 hover:bg-slate-100 hover:text-gray-900 transition-all cursor-pointer shadow-4xs"
               title="Xuất định dạng CSV tải về"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Xuất danh sách CSV
+              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Xuất bản CSV
             </button>
             <button
               onClick={handleOpenAddModal}
-              className="bg-orange-600 text-white font-medium px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 hover:bg-orange-700 transition-colors cursor-pointer"
+              className="bg-orange-600 text-white font-extrabold sm:font-medium px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm flex items-center justify-center gap-1.5 hover:bg-orange-700 transition-all cursor-pointer shadow-2xs"
             >
-              <Plus className="w-4 h-4" /> Thêm khách hàng mới
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Thêm khách hàng
             </button>
           </div>
         </div>
 
         <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-2.5 sm:top-3 h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400" />
           <input
             type="text"
             placeholder="Tìm theo tên, SĐT, số CCCD, trang liên kết..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2 text-sm w-full border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            className="pl-8.5 pr-4 py-1.5 sm:py-2.5 text-xs sm:text-sm w-full border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-400/80"
           />
         </div>
       </div>
@@ -211,9 +211,7 @@ export default function CustomerManager({
         {paginatedCustomers.map(cust => {
           const sortedContracts = (contracts || [])
             .filter(contract => 
-              contract.customerId === cust.id || 
-              contract.customerPhone === cust.phone ||
-              (cust.name && contract.customerName.toLowerCase().trim() === cust.name.toLowerCase().trim())
+              contract.customerPhone === cust.phone
             )
             .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
@@ -607,9 +605,7 @@ export default function CustomerManager({
       {selectedCustomerForHistory && (() => {
         const sortedContracts = (contracts || [])
           .filter(contract => 
-            contract.customerId === selectedCustomerForHistory.id || 
-            contract.customerPhone === selectedCustomerForHistory.phone ||
-            (selectedCustomerForHistory.name && contract.customerName.toLowerCase().trim() === selectedCustomerForHistory.name.toLowerCase().trim())
+            contract.customerPhone === selectedCustomerForHistory.phone
           )
           .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
@@ -626,7 +622,7 @@ export default function CustomerManager({
                     <FileText className="w-5 h-5 text-white" />
                   </span>
                   <div>
-                    <h3 className="font-bold text-base sm:text-lg">Hồ Sơ & Lịch Sử Đơn Thuê Máy khéo kín</h3>
+                    <h3 className="font-bold text-base sm:text-lg">Hồ Sơ & Lịch Sử Đơn Thuê Máy khép kín</h3>
                     <p className="text-xs text-indigo-100">
                       Khách hàng: <span className="font-extrabold text-white text-sm">{selectedCustomerForHistory.name}</span>
                     </p>
@@ -806,8 +802,8 @@ export default function CustomerManager({
                               </div>
                               <div className="bg-indigo-50/40 border border-indigo-100 p-2 rounded-xl col-span-2 sm:col-span-1">
                                 <div className="text-[10px] text-indigo-605 font-extrabold uppercase text-indigo-700">Bảo đảm thế chấp</div>
-                                <div className="font-mono text-[11px] text-indigo-700 font-bold truncate" title={contract.customerDocNote || `${contract.customerDocType}: ${contract.depositAmount.toLocaleString()}đ`}>
-                                  {contract.customerDocNote || `${contract.customerDocType} (Trị giá ${contract.depositAmount.toLocaleString()}đ)`}
+                                <div className="font-mono text-[11px] text-indigo-700 font-bold truncate" title={contract.customerDocNote || `${contract.customerDocType === 'CCCD_And_1M' ? 'Giữ CCCD + 1 triệu' : contract.customerDocType}: ${contract.depositAmount.toLocaleString()}đ`}>
+                                  {contract.customerDocNote || `${contract.customerDocType === 'CCCD_And_1M' ? 'Giữ CCCD + 1 triệu' : contract.customerDocType === 'CCCD' ? 'Giữ CCCD' : contract.customerDocType} (Trị giá ${contract.depositAmount.toLocaleString()}đ)`}
                                 </div>
                               </div>
                             </div>
