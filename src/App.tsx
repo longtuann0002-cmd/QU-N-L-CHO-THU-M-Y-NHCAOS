@@ -908,25 +908,46 @@ export default function App() {
     }, 2000);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoginError('');
-    // Đọc giá trị từ DOM ref để xử lý trường hợp trình duyệt autofill
-    // không kích hoạt sự kiện onChange của React (controlled input bị bỏ qua)
-    const rawUsername = usernameRef.current?.value ?? usernameInput;
-    const rawPassword = passwordRef.current?.value ?? passwordInput;
-    const username = rawUsername.trim().toLowerCase();
-    const password = rawPassword;
-    const foundUser = registeredUsers.find(
-      u => u.username.toLowerCase() === username && u.password === password
-    );
-    if (foundUser) {
-      setCurrentUser(foundUser);
-      setLoginError('');
-      setUsernameInput('');
-      setPasswordInput('');
-    } else {
-      setLoginError('Tài khoản hoặc mật khẩu không chính xác!');
+
+    try {
+      // Dùng FormData để đọc giá trị thực từ form — cách đáng tin cậy nhất,
+      // bắt được cả trường hợp trình duyệt autofill không kích hoạt onChange.
+      const formData = new FormData(e.currentTarget);
+      const rawUsername = (formData.get('username') as string | null)
+        ?? usernameRef.current?.value
+        ?? usernameInput;
+      const rawPassword = (formData.get('password') as string | null)
+        ?? passwordRef.current?.value
+        ?? passwordInput;
+
+      const username = (rawUsername ?? '').trim().toLowerCase();
+      const password = rawPassword ?? '';
+
+      // Kiểm tra registeredUsers hợp lệ trước khi tìm kiếm
+      if (!Array.isArray(registeredUsers) || registeredUsers.length === 0) {
+        console.error('[Login] registeredUsers is empty or invalid:', registeredUsers);
+        setLoginError('Lỗi hệ thống: Không tải được danh sách tài khoản. Vui lòng tải lại trang!');
+        return;
+      }
+
+      const foundUser = registeredUsers.find(
+        u => u.username.toLowerCase() === username && u.password === password
+      );
+
+      if (foundUser) {
+        setCurrentUser(foundUser);
+        setLoginError('');
+        setUsernameInput('');
+        setPasswordInput('');
+      } else {
+        setLoginError('Tài khoản hoặc mật khẩu không chính xác!');
+      }
+    } catch (err) {
+      console.error('[Login] Unexpected error during login:', err);
+      setLoginError('Đã xảy ra lỗi khi đăng nhập. Vui lòng thử lại!');
     }
   };
 

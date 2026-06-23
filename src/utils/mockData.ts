@@ -364,8 +364,7 @@ export function loadStoredData<T>(key: string, defaultVal: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed === null ? defaultVal : parsed;
+      return JSON.parse(raw);
     }
   } catch (e) {
     console.warn(`Error reading ${key} from localStorage`, e);
