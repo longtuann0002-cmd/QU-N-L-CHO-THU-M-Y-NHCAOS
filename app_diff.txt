@@ -1,0 +1,1489 @@
+﻿
+InputObject                                                                    
+-----------                                                                    
+import { isSupabaseConfigured, syncToSupabase, fetchFromSupabase } from './u...
+  { id: '1', username: 'admin', password: '12345', fullName: 'Quáº£n trá»‹ v...
+  const [registeredUsers, setRegisteredUsers] = useState(() => {               
+    const loaded = loadStoredData('registeredUsers', DEFAULT_USERS);           
+    // Ensure admin user exists with 'admin' role and has password '12345' o...
+    const hasAdmin = loaded.some((u: any) => u.username.toLowerCase() === 'a...
+    if (!hasAdmin) {                                                           
+      return [                                                                 
+        { id: '1', username: 'admin', password: '12345', fullName: 'Quáº£n t...
+        ...loaded                                                              
+      ];                                                                       
+    } else {                                                                   
+      return loaded.map((u: any) =>                                            
+        u.username.toLowerCase() === 'admin'                                   
+          ? { ...u, role: 'admin', password: u.password === 'password' ? '12...
+          : u                                                                  
+  const [sidebarDropdownOpen, setSidebarDropdownOpen] = useState(false);       
+  // Load states from localStorage or use rich mock dataset                    
+  const [cameras, setCameras] = useState<Camera[]>(() =>                       
+    loadStoredData('cameras', INITIAL_CAMERAS)                                 
+  const [contracts, setContracts] = useState<RentalContract[]>(() => {         
+    const loaded = loadStoredData('contracts', INITIAL_CONTRACTS);             
+    const migrationKey = 'camlease_historical_contracts_migrated_v1';          
+    if (!localStorage.getItem(migrationKey)) {                                 
+      localStorage.setItem(migrationKey, 'true');                              
+      const missingMockContracts = INITIAL_CONTRACTS.filter(                   
+        item => item.id.startsWith('mock-con-') && !loaded.some(loadedItem =...
+      if (missingMockContracts.length > 0) {                                   
+        return [...loaded, ...missingMockContracts];                           
+    return loaded;                                                             
+  const [customers, setCustomers] = useState<Customer[]>(() =>                 
+    loadStoredData('customers', INITIAL_CUSTOMERS)                             
+  const [expenses, setExpenses] = useState<Expense[]>(() => {                  
+    const loaded = loadStoredData('expenses', INITIAL_EXPENSES);               
+    const migrationKey = 'camlease_historical_expenses_migrated_v1';           
+    if (!localStorage.getItem(migrationKey)) {                                 
+      localStorage.setItem(migrationKey, 'true');                              
+      const missingMockExpenses = INITIAL_EXPENSES.filter(                     
+        item => item.id.startsWith('mock-exp-') && !loaded.some(loadedItem =...
+      if (missingMockExpenses.length > 0) {                                    
+        return [...loaded, ...missingMockExpenses];                            
+    return loaded;                                                             
+  });                                                                          
+    loadStoredData('logoText', 'TIá»†M áº¢NH NHÃ€ CAOS')                       
+    loadStoredData('logoSubtitle', 'CHO THUÃŠ MÃY áº¢NH GIÃ Ráºº')           
+  // simulated system date for operations & notifications                      
+    const todayStr = new Date().toLocaleDateString('sv'); // Format YYYY-MM-DD 
+    return loadStoredData('systemDate', todayStr);                             
+  });                                                                          
+  // Currently focused date highlights (Default to the nearest booking/sched...
+  const [selectedDate, setSelectedDate] = useState<string>(() => {             
+    const loadedContracts = loadStoredData('contracts', INITIAL_CONTRACTS) a...
+    if (!loadedContracts || loadedContracts.length === 0) {                    
+      return '2026-06-17';                                                     
+    const currentSystemDate = loadStoredData('systemDate', '2026-06-17');      
+    const systemTime = new Date(currentSystemDate).getTime();                  
+    let closestDate = currentSystemDate;                                       
+    loadedContracts.forEach((c: RentalContract) => {                           
+        if (diff < minDiff) {                                                  
+          minDiff = diff;                                                      
+          closestDate = dStr;                                                  
+    return closestDate;                                                        
+  });                                                                          
+  // Sync data states to local storage and Supabase                            
+    if (isSupabaseConfigured) {                                                
+      syncToSupabase('cameras', cameras);                                      
+  }, [cameras]);                                                               
+    if (isSupabaseConfigured) {                                                
+      syncToSupabase('contracts', contracts);                                  
+  }, [contracts]);                                                             
+    if (isSupabaseConfigured) {                                                
+      syncToSupabase('customers', customers);                                  
+  }, [customers]);                                                             
+    if (isSupabaseConfigured) {                                                
+      syncToSupabase('expenses', expenses);                                    
+  }, [expenses]);                                                              
+    saveStoredData('systemDate', systemDate);                                  
+  }, [systemDate]);                                                            
+    saveStoredData('logoText', logoText);                                      
+  }, [logoText]);                                                              
+    saveStoredData('logoSubtitle', logoSubtitle);                              
+  }, [logoSubtitle]);                                                          
+    saveStoredData('logoIconType', logoIconType);                              
+  }, [logoIconType]);                                                          
+    saveStoredData('logoIconColor', logoIconColor);                            
+  }, [logoIconColor]);                                                         
+    saveStoredData('logoBase64', logoBase64);                                  
+  }, [logoBase64]);                                                            
+    saveStoredData('registeredUsers', registeredUsers);                        
+    if (isSupabaseConfigured) {                                                
+      syncToSupabase('registeredUsers', registeredUsers);                      
+  }, [registeredUsers]);                                                       
+    saveStoredData('currentUser', currentUser);                                
+  }, [currentUser]);                                                           
+    saveStoredData('camlease_snapshots', snapshots);                           
+    if (isSupabaseConfigured) {                                                
+      syncToSupabase('camlease_snapshots', snapshots);                         
+  }, [snapshots]);                                                             
+  // Load initial data block asynchronously from Supabase if configured or s...
+    if (isSupabaseConfigured) {                                                
+      const loadInitialSupabaseData = async () => {                            
+        try {                                                                  
+          const cloudCameras = await fetchFromSupabase('cameras');             
+          const cloudContracts = await fetchFromSupabase('contracts');         
+          const cloudCustomers = await fetchFromSupabase('customers');         
+          const cloudExpenses = await fetchFromSupabase('expenses');           
+          const cloudUsers = await fetchFromSupabase('registeredUsers');       
+          const cloudSnapshots = await fetchFromSupabase('camlease_snapshots');
+          if (cloudCameras) setCameras(cloudCameras);                          
+          if (cloudContracts) setContracts(cloudContracts);                    
+          if (cloudCustomers) setCustomers(cloudCustomers);                    
+          if (cloudExpenses) setExpenses(cloudExpenses);                       
+          if (cloudUsers) setRegisteredUsers(cloudUsers);                      
+          if (cloudSnapshots) setSnapshots(cloudSnapshots);                    
+          if (cloudCameras || cloudContracts || cloudCustomers || cloudExpen...
+            // Synchronized successfully, no toast notification displayed      
+          } else {                                                             
+            console.log('[Supabase] Initializing store seed records on cloud');
+            await syncToSupabase('cameras', cameras);                          
+            await syncToSupabase('contracts', contracts);                      
+            await syncToSupabase('customers', customers);                      
+            await syncToSupabase('expenses', expenses);                        
+            await syncToSupabase('registeredUsers', registeredUsers);          
+            await syncToSupabase('camlease_snapshots', snapshots);             
+        } catch (err) {                                                        
+          console.error('[Supabase] Sync boot error, falling back locally', ...
+          addToast('Äá»“ng bá»™ Supabase tháº¥t báº¡i. Äang cháº¡y cháº¿ Ä...
+      loadInitialSupabaseData();                                               
+      if (parsed.systemDate) setSystemDate(parsed.systemDate);                 
+      if (snap.systemDate) setSystemDate(snap.systemDate);                     
+    // (If contract starts today, mark cameras as Rented, but actually we ma...
+    setCameras(prevCams =>                                                     
+      prevCams.map(cam => {                                                    
+        cust => cust.phone === newContract.customerPhone                       
+      );                                                                       
+        return [...prevCusts, newCustomer];                                    
+      return prevCusts.map(cust => {                                           
+        if (cust.phone === newContract.customerPhone) {                        
+          return { ...cust, rentalCount: cust.rentalCount + 1 };               
+      };                                                                       
+      );                                                                       
+            cust => cust.phone === c.customerPhone                             
+            // Count contracts for this customer                               
+              ct => ct.customerPhone === c.customerPhone                       
+          let finalNote = note ? `${c.note || ''}\n[Tráº¡ng thÃ¡i]: ${note}`...
+          let finalPaidAmount = c.paidAmount;                                  
+          if (status === 'Active') {                                           
+            const extra = c.totalPrice - c.paidAmount;                         
+            if (extra > 0) {                                                   
+              finalNote = `${finalNote || ''}\n[Há»‡ thá»‘ng]: KhÃ¡ch nháº­n...
+              finalPaidAmount = c.totalPrice;                                  
+            } else {                                                           
+              finalPaidAmount = c.totalPrice;                                  
+          } else if (paidAmount !== undefined) {                               
+            finalPaidAmount = paidAmount;                                      
+            note: finalNote,                                                   
+            paidAmount: finalPaidAmount                                        
+            setCameras(prevCams =>                                             
+              prevCams.map(cam => {                                            
+              })                                                               
+            );                                                                 
+            setCameras(prevCams =>                                             
+              prevCams.map(cam => {                                            
+              })                                                               
+            );                                                                 
+          return { ...c, note };                                               
+    // Remove the contract from the list                                       
+    setCameras(prevCams =>                                                     
+      prevCams.map(cam => {                                                    
+          // See if any of the remaining contracts keep this camera rented     
+      })                                                                       
+        if (cust.phone === contractToDelete.customerPhone) {                   
+          return { ...cust, rentalCount: Math.max(0, cust.rentalCount - 1) };  
+        return cust;                                                           
+      })                                                                       
+  const handleLogin = (e: React.FormEvent) => {                                
+    const username = usernameInput.trim().toLowerCase();                       
+    const foundUser = registeredUsers.find(                                    
+      (u: any) => u.username.toLowerCase() === username && (u.password === p...
+    if (foundUser) {                                                           
+      // Force admin role for username 'admin'                                 
+      const activeUser = username === 'admin' ? { ...foundUser, role: 'admin...
+      setCurrentUser(activeUser);                                              
+      setLoginError('');                                                       
+      setUsernameInput('');                                                    
+      setPasswordInput('');                                                    
+    } else {                                                                   
+      setLoginError('TÃ i khoáº£n hoáº·c máº­t kháº©u khÃ´ng chÃ­nh xÃ¡c!');   
+    }                                                                          
+    );                                                                         
+    }                                                                          
+    }                                                                          
+    }                                                                          
+    }                                                                          
+    }                                                                          
+    }                                                                          
+    }                                                                          
+        {/* Left decoration panel with customizable brand colors and Unsplas...
+        <div className="hidden md:flex md:w-5/12 lg:w-6/12 xl:w-7/12 bg-slat...
+          <div className="flex items-center gap-3.5 relative z-10 bg-slate-9...
+              <div className="w-14 h-14 rounded-2xl overflow-hidden border b...
+                className="w-14 h-14 rounded-2xl text-white shadow-xl flex i...
+                {logoIconType === 'aperture' && <Aperture className="w-8 h-8...
+                {logoIconType === 'film' && <Film className="w-8 h-8" />}      
+                {logoIconType === 'sparkles' && <Sparkles className="w-8 h-8...
+                {logoIconType === 'smile' && <Smile className="w-8 h-8" />}    
+                {logoIconType === 'image' && <ImageIcon className="w-8 h-8" />}
+                {(logoIconType === 'camera' || logoIconType === 'upload') &&...
+            <div className="leading-tight pr-4">                               
+              <span className="font-sans font-black text-white text-lg track...
+                {logoText || 'TIá»†M áº¢NH NHÃ€ CAOS'}                         
+              <span className="text-[10px] text-slate-300 font-mono block tr...
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 te...
+              <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" /> P...
+            <span>Â© 2026 {logoText || 'TIá»†M áº¢NH NHÃ€ CAOS'} Enterprise ...
+        <div className="flex-grow bg-slate-950 flex flex-col justify-center ...
+            {/* Mobile-only beautiful branding logotype */}                    
+            <div className="flex md:hidden items-center justify-center gap-2...
+              {logoIconType === 'upload' && logoBase64 ? (                     
+                <div className="w-11 h-11 rounded-xl overflow-hidden border ...
+                  <img src={logoBase64} alt="Custom Logo" className="w-full ...
+                <span                                                          
+                  className="w-11 h-11 rounded-xl text-white shadow-lg flex ...
+                  style={{ backgroundColor: logoIconColor }}                   
+                  {logoIconType === 'aperture' && <Aperture className="w-6.5...
+                  {logoIconType === 'film' && <Film className="w-6.5 h-6.5" />}
+                  {logoIconType === 'sparkles' && <Sparkles className="w-6.5...
+                  {logoIconType === 'smile' && <Smile className="w-6.5 h-6.5...
+                  {logoIconType === 'image' && <ImageIcon className="w-6.5 h...
+                  {(logoIconType === 'camera' || logoIconType === 'upload') ...
+              <div className="leading-tight text-left">                        
+                <span className="font-sans font-black text-white text-base t...
+                  {logoText || 'TIá»†M áº¢NH NHÃ€ CAOS'}                       
+                <span className="text-[9px] text-orange-400 font-mono block ...
+            <div className="bg-slate-900/95 backdrop-blur-md border border-s...
+                          className="w-full pl-10 pr-10 py-2.5 bg-slate-950 ...
+                        onClick={() => handleAutofill('admin', '12345')}       
+                          <span className="text-[9px] text-slate-500 font-mo...
+              ) : (                                                            
+    );                                                                         
+    <div className="h-screen bg-slate-50 flex font-sans select-none antialia...
+      {/* PERSISTENT LEFT SIDEBAR - Visible on medium screens and up */}       
+      <aside className="hidden md:flex flex-col w-20 lg:w-[280px] bg-[#0b0f1...
+                                                                               
+        {/* Top Header Section: Tiá»‡m áº£nh Caos logo */}                     
+        <div                                                                   
+          className="px-3 py-6 lg:px-6 border-b border-slate-800/40 flex fle...
+          title="Thay Ä‘á»•i Logo & ThÆ°Æ¡ng hiá»‡u"                           
+            <div className="w-14 h-14 rounded-full overflow-hidden border bo...
+              <img src={logoBase64} alt="Custom Logo" className="w-full h-fu...
+            <span                                                              
+              className="w-14 h-14 rounded-full text-white shrink-0 shadow-m...
+              {logoIconType === 'aperture' && <Aperture className="w-8 h-8" />}
+              {logoIconType === 'film' && <Film className="w-8 h-8" />}        
+              {logoIconType === 'sparkles' && <Sparkles className="w-8 h-8 t...
+              {logoIconType === 'smile' && <Smile className="w-8 h-8" />}      
+              {logoIconType === 'image' && <ImageIcon className="w-8 h-8" />}  
+              {(logoIconType === 'camera' || logoIconType === 'upload') && <...
+          <div className="leading-tight hidden lg:block">                      
+            <span className="font-display font-black text-white text-[15.5px...
+              {logoText || 'TIá»†M áº¢NH NHÃ€ CAOS'}                           
+            <span className="text-[10px] text-slate-400 font-bold block trac...
+              {logoSubtitle || 'CHO THUÃŠ MÃY áº¢NH GIÃ Ráºº'}               
+            </span>                                                            
+        {/* Menu Title */}                                                     
+        <div className="px-6 pt-5 pb-2 text-[11px] font-black uppercase trac...
+          Menu chÃ­nh                                                          
+        <div className="pt-2 pb-1 border-b border-slate-800/25 md:block lg:h...
+        {/* Sidebar Nav Items */}                                              
+        <nav className="flex-1 px-2.5 lg:px-4 space-y-2 lg:space-y-1.5 overf...
+          {/* Calendar (Lá»‹ch mÃ¡y) */}                                       
+            onClick={() => setActiveTab('calendar')}                           
+            className={`w-full rounded-xl transition-all flex flex-col lg:fl...
+              activeTab === 'calendar'                                         
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-med...
+            }`}                                                                
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:...
+              <Calendar className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${act...
+              <div className="leading-tight hidden lg:block text-left">        
+                <span className="block text-[13.5px] font-extrabold tracking...
+                <span className={`text-[11px] block mt-0.5 ${activeTab === '...
+              <span className="text-[9.5px] font-bold block lg:hidden upperc...
+            {activeTab === 'calendar' && <ChevronRight className="w-4.5 h-4....
+          {/* Contracts (ÄÆ¡n thuÃª) */}                                      
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('contracts')}                          
+            className={`w-full rounded-xl transition-all flex flex-col lg:fl...
+              activeTab === 'contracts'                                        
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-med...
+            }`}                                                                
+          >                                                                    
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:...
+              <FileText className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${act...
+              <div className="leading-tight hidden lg:block text-left">        
+                <span className="block text-[13.5px] font-extrabold tracking...
+                <span className={`text-[11px] block mt-0.5 ${activeTab === '...
+              <span className="text-[9.5px] font-bold block lg:hidden upperc...
+            {activeTab === 'contracts' && <ChevronRight className="w-4.5 h-4...
+          </button>                                                            
+          {/* Equipment (Thiáº¿t bá»‹) */}                                     
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('equipment')}                          
+            className={`w-full rounded-xl transition-all flex flex-col lg:fl...
+              activeTab === 'equipment'                                        
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-med...
+            }`}                                                                
+          >                                                                    
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:...
+              <CameraIcon className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${a...
+              <div className="leading-tight hidden lg:block text-left">        
+                <span className="block text-[13.5px] font-extrabold tracking...
+                <span className={`text-[11px] block mt-0.5 ${activeTab === '...
+              <span className="text-[9.5px] font-bold block lg:hidden upperc...
+            {activeTab === 'equipment' && <ChevronRight className="w-4.5 h-4...
+          </button>                                                            
+          {/* Customers (KhÃ¡ch hÃ ng) */}                                     
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('customers')}                          
+            className={`w-full rounded-xl transition-all flex flex-col lg:fl...
+              activeTab === 'customers'                                        
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-med...
+            }`}                                                                
+          >                                                                    
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:...
+              <Users className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${active...
+              <div className="leading-tight hidden lg:block text-left">        
+                <span className="block text-[13.5px] font-extrabold tracking...
+                <span className={`text-[11px] block mt-0.5 ${activeTab === '...
+              <span className="text-[9.5px] font-bold block lg:hidden upperc...
+            {activeTab === 'customers' && <ChevronRight className="w-4.5 h-4...
+          </button>                                                            
+          {/* Revenue (Doanh thu) */}                                          
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('revenue')}                            
+            className={`w-full rounded-xl transition-all flex flex-col lg:fl...
+              activeTab === 'revenue'                                          
+                ? 'bg-orange-600 text-white shadow-md font-semibold'           
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-med...
+            }`}                                                                
+          >                                                                    
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:...
+              <TrendingUp className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${a...
+              <div className="leading-tight hidden lg:block text-left">        
+                <span className="block text-[13.5px] font-extrabold tracking...
+                <span className={`text-[11px] block mt-0.5 ${activeTab === '...
+              <span className="text-[9.5px] font-bold block lg:hidden upperc...
+            {activeTab === 'revenue' && <ChevronRight className="w-4.5 h-4.5...
+          </button>                                                            
+          {/* Expenses (Khoáº£n chi) */}                                       
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('expenses')}                           
+            className={`w-full rounded-xl transition-all flex flex-col lg:fl...
+              activeTab === 'expenses'                                         
+                ? 'bg-orange-600 text-white shadow-md font-semibold font-bold' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5 font-med...
+            }`}                                                                
+          >                                                                    
+            <div className="flex flex-col lg:flex-row items-center gap-1 lg:...
+              <DollarSign className={`w-5 h-5 lg:w-5.5 lg:h-5.5 shrink-0 ${a...
+              <div className="leading-tight hidden lg:block text-left">        
+                <span className="block text-[13.5px] font-extrabold tracking...
+                <span className={`text-[11px] block mt-0.5 ${activeTab === '...
+              <span className="text-[9.5px] font-bold block lg:hidden upperc...
+            {activeTab === 'expenses' && <ChevronRight className="w-4.5 h-4....
+          </button>                                                            
+        {/* System Date Box */}                                                
+        <div className="mx-4 mb-4 bg-slate-900 border border-slate-800/80 p-...
+          <div className="flex items-center gap-1.5 mb-1.5">                   
+            <span className="w-2 h-2 rounded-full inline-block shrink-0 bg-o...
+            <span className="text-[10px] font-extrabold uppercase tracking-w...
+              NgÃ y há»‡ thá»‘ng                                               
+            </span>                                                            
+          <div className="text-sm font-black font-mono text-white mt-1 point...
+            <span>{systemDate}</span>                                          
+        {/* Bottom User Profile Section */}                                    
+        <div className="relative p-3 lg:p-4 border-t border-slate-800/50 fle...
+          <div                                                                 
+            onClick={() => setSidebarDropdownOpen(!sidebarDropdownOpen)}       
+            className="flex flex-col lg:flex-row items-center gap-2 lg:gap-2...
+            title="TÃ i khoáº£n & Thiáº¿t láº­p"                               
+          >                                                                    
+            <div className="w-9 h-9 rounded-full overflow-hidden border bord...
+              <img                                                             
+                src={currentUser?.avatar || 'https://images.unsplash.com/pho...
+                alt="Avatar"                                                   
+                className="w-full h-full object-cover"                         
+            <div className="text-center lg:text-left leading-tight min-w-0 h...
+              <span className="block text-xs font-black text-white truncate ...
+                {currentUser?.fullName}                                        
+              <span className="text-[9px] text-[#ea580c] font-bold uppercase...
+                ADMIN                                                          
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setSidebarDropdownOpen(!sidebarDropdownOpen)}       
+            className="hidden lg:block p-1.5 rounded-lg text-slate-400 hover...
+            title="TÃ i khoáº£n & Thiáº¿t láº­p"                               
+          >                                                                    
+            <Settings className="w-4.5 h-4.5" />                               
+          </button>                                                            
+          {/* Sidebar-specific Profile Dropdown - opens upwards */}            
+          {sidebarDropdownOpen && (                                            
+              <div className="fixed inset-0 z-40 cursor-default" onClick={()...
+              <div className="absolute left-3 bottom-full mb-2 w-60 bg-[#111...
+                <div className="px-3 py-2 border-b border-slate-800 font-bol...
+                  {currentUser?.fullName}                                      
+                  <span className="block text-[10px] text-slate-500 mt-0.5 f...
+                  onClick={() => { setSidebarDropdownOpen(false); setShowCha...
+                  className="w-full px-3 py-3 hover:bg-slate-800/80 hover:te...
+                  Äá»•i máº­t kháº©u                                          
+                  onClick={() => { setSidebarDropdownOpen(false); setShowCha...
+                  className="w-full px-3 py-3 hover:bg-slate-800/80 hover:te...
+                  Äá»•i áº£nh Ä‘áº¡i diá»‡n                                   
+                {currentUser?.role === 'admin' && (                            
+                    onClick={() => { setSidebarDropdownOpen(false); setShowM...
+                    className="w-full px-3 py-3 hover:bg-slate-800/80 hover:...
+                    Quáº£n lÃ½ tÃ i khoáº£n                                    
+                  type="button"                                                
+                  onClick={() => { setSidebarDropdownOpen(false); setShowBac...
+                  className="w-full px-3 py-3 hover:bg-slate-800/80 text-ora...
+                >                                                              
+                  Sao lÆ°u & KhÃ´i phá»¥c                                      
+                <div className="border-t border-slate-800 my-1" />             
+                <button                                                        
+                  type="button"                                                
+                  onClick={() => { setSidebarDropdownOpen(false); handleLogo...
+                  className="w-full px-3 py-3 hover:bg-rose-950/40 text-rose...
+                >                                                              
+                  ÄÄƒng xuáº¥t                                                
+                </button>                                                      
+      {/* RIGHT MAIN WORKSPACE PANORAMA */}                                    
+      <div className="flex-grow flex flex-col min-w-0 h-screen overflow-hidd...
+                                                                               
+        {/* TOP PATH HEADER BAR */}                                            
+        <header className="bg-white/85 backdrop-blur-md border-b border-gray...
+                                                                               
+          {/* Breadcrumb path */}                                              
+          <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray...
+            <span className="hidden sm:inline text-slate-400 font-bold upper...
+            <span className="hidden sm:inline text-slate-300">â€º</span>       
+            <span className="text-slate-800 font-black uppercase tracking-wi...
+              {activeTab === 'calendar' && 'Lá»‹ch mÃ¡y'}                      
+              {activeTab === 'contracts' && 'ÄÆ¡n thuÃª'}                     
+              {activeTab === 'equipment' && 'Thiáº¿t bá»‹'}                    
+              {activeTab === 'revenue' && 'Doanh thu'}                         
+              {activeTab === 'customers' && 'KhÃ¡ch hÃ ng'}                    
+              {activeTab === 'expenses' && 'Khoáº£n chi'}                      
+            </span>                                                            
+          <div className="flex items-center gap-1.5 sm:gap-3">                 
+            {/* Notification & User Panel for both Mobile & Desktop */}        
+            <div                                                               
+              className="bg-orange-50/95 border border-orange-105/80 text-or...
+              title="NgÃ y hoáº¡t Ä‘á»™ng cá»§a há»‡ thá»‘ng"                  
+              <Calendar className="w-3.5 h-3.5 text-orange-600" />             
+              <span>Há»‡ thá»‘ng: <span className="font-mono font-black">{sy...
+            <NotificationCenter                                                
+              contracts={contracts}                                            
+              cameras={cameras}                                                
+              onUpdateContractStatus={handleUpdateContractStatus}              
+              systemDate={systemDate}                                          
+              setSystemDate={setSystemDate}                                    
+            />                                                                 
+            {/* Profile Dropdown for safety / logout */}                       
+            <div className="relative">                                         
+                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}   
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden ...
+                <img                                                           
+                  src={currentUser?.avatar || 'https://images.unsplash.com/p...
+                  alt="Avatar"                                                 
+                  className="w-full h-full object-cover"                       
+              {profileDropdownOpen && (                                        
+                <>                                                             
+                  <div className="fixed inset-0 z-40 cursor-default" onClick...
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-whi...
+                    <div className="px-3 py-2 border-b border-gray-150 font-...
+                      {currentUser?.fullName}                                  
+                      <span className="block text-[10px] text-gray-400 mt-0....
+                    {/* General profile links */}                              
+                      onClick={() => { setProfileDropdownOpen(false); setSho...
+                      className="w-full px-3 py-2 hover:bg-orange-50 text-le...
+                      Äá»•i máº­t kháº©u                                      
+                      onClick={() => { setProfileDropdownOpen(false); setSho...
+                      className="w-full px-3 py-2 hover:bg-orange-50 text-le...
+                      Äá»•i áº£nh Ä‘áº¡i diá»‡n                               
+                    {currentUser?.role === 'admin' && (                        
+                        onClick={() => { setProfileDropdownOpen(false); setS...
+                        className="w-full px-3 py-2 hover:bg-orange-50 text-...
+                        Quáº£n lÃ½ tÃ i khoáº£n                                
+                    )}                                                         
+                      onClick={() => { setProfileDropdownOpen(false); setSho...
+                      className="w-full px-3 py-2 hover:bg-orange-50 text-le...
+                      Sao lÆ°u & KhÃ´i phá»¥c                                  
+                    <div className="border-t border-gray-150/85 my-1" />       
+                      onClick={handleLogout}                                   
+                      className="w-full px-3 py-2 hover:bg-rose-50 text-rose...
+                      ÄÄƒng xuáº¥t                                            
+                </>                                                            
+        {/* MOBILE NAVIGATION BAR - iOS Style with safe area padding */}       
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-whit...
+          {/* Lá»‹ch mÃ¡y */}                                                  
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('calendar')}                           
+            className={`flex flex-col items-center justify-center flex-1 py-...
+              activeTab === 'calendar' ? 'text-orange-600 scale-102' : 'text...
+            }`}                                                                
+          >                                                                    
+            <Calendar className={`w-5 h-5 mb-1 transition-transform ${active...
+            <span>Lá»‹ch mÃ¡y</span>                                           
+          </button>                                                            
+                                                                               
+          {/* ÄÆ¡n thuÃª */}                                                  
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('contracts')}                          
+            className={`flex flex-col items-center justify-center flex-1 py-...
+              activeTab === 'contracts' ? 'text-orange-600 scale-102' : 'tex...
+            }`}                                                                
+          >                                                                    
+            <FileText className={`w-5 h-5 mb-1 transition-transform ${active...
+            <span>ÄÆ¡n thuÃª</span>                                           
+          </button>                                                            
+          {/* Thiáº¿t bá»‹ */}                                                 
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('equipment')}                          
+            className={`flex flex-col items-center justify-center flex-1 py-...
+              activeTab === 'equipment' ? 'text-orange-600 scale-102' : 'tex...
+            }`}                                                                
+          >                                                                    
+            <CameraIcon className={`w-5 h-5 mb-1 transition-transform ${acti...
+            <span>Thiáº¿t bá»‹</span>                                          
+          </button>                                                            
+          {/* KhÃ¡ch hÃ ng */}                                                 
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('customers')}                          
+            className={`flex flex-col items-center justify-center flex-1 py-...
+              activeTab === 'customers' ? 'text-orange-600 scale-102' : 'tex...
+            }`}                                                                
+          >                                                                    
+            <Users className={`w-5 h-5 mb-1 transition-transform ${activeTab...
+            <span>KhÃ¡ch</span>                                                
+          </button>                                                            
+          {/* Doanh thu */}                                                    
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('revenue')}                            
+            className={`flex flex-col items-center justify-center flex-1 py-...
+              activeTab === 'revenue' ? 'text-orange-600 scale-102' : 'text-...
+            }`}                                                                
+          >                                                                    
+            <TrendingUp className={`w-5 h-5 mb-1 transition-transform ${acti...
+            <span>Doanh thu</span>                                             
+          </button>                                                            
+          {/* Khoáº£n chi */}                                                  
+          <button                                                              
+            type="button"                                                      
+            onClick={() => setActiveTab('expenses')}                           
+            className={`flex flex-col items-center justify-center flex-1 py-...
+              activeTab === 'expenses' ? 'text-orange-600 scale-102' : 'text...
+            }`}                                                                
+          >                                                                    
+            <DollarSign className={`w-5 h-5 mb-1 transition-transform ${acti...
+            <span>Khoáº£n chi</span>                                           
+          </button>                                                            
+        {/* MAIN BODY AREA */}                                                 
+        <main className="flex-grow w-full px-4 sm:px-6 md:px-8 py-6 pb-26 md...
+          {/* Header row in main panel content */}                             
+          <div className="flex flex-col sm:flex-row sm:items-center justify-...
+            <div className="space-y-0.5">                                      
+              <span className="text-[9px] sm:text-[10px] font-extrabold uppe...
+              <h1 className="text-xl sm:text-2xl font-black text-gray-950 tr...
+                {activeTab === 'calendar' && 'Lá»‹ch mÃ¡y'}                    
+                {activeTab === 'contracts' && 'Há»£p Ä‘á»“ng & ÄÆ¡n thuÃª'}   
+                {activeTab === 'equipment' && 'Kho thiáº¿t bá»‹'}              
+                {activeTab === 'revenue' && 'BÃ¡o cÃ¡o doanh thu'}             
+                {activeTab === 'customers' && 'Há»“ sÆ¡ khÃ¡ch hÃ ng'}         
+                {activeTab === 'expenses' && 'Nháº­t kÃ½ khoáº£n chi'}         
+              </h1>                                                            
+            <div className="text-[10px] sm:text-xs text-gray-500 font-bold b...
+              <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate...
+              <span>Cáº­p nháº­t má»›i nháº¥t:</span>                          
+              <span className="text-gray-800 font-extrabold">HÃ´m nay</span>   
+          <div className="transition-all duration-200">                        
+            {activeTab === 'calendar' && (                                     
+              <BookingCalendar                                                 
+                onAddContract={handleAddContract}                              
+                onDeleteContract={currentUser?.role === 'admin' ? handleDele...
+                selectedDate={selectedDate}                                    
+                setSelectedDate={setSelectedDate}                              
+            )}                                                                 
+            {activeTab === 'contracts' && (                                    
+              <ContractManager                                                 
+                contracts={contracts}                                          
+                cameras={cameras}                                              
+                onAddContract={handleAddContract}                              
+                onDeleteContract={currentUser?.role === 'admin' ? handleDele...
+                onUpdateContractNote={handleUpdateContractNote}                
+                systemDate={systemDate}                                        
+              />                                                               
+            )}                                                                 
+            {activeTab === 'equipment' && (                                    
+              <EquipmentTracker                                                
+                cameras={cameras}                                              
+                onAddCamera={handleAddCamera}                                  
+                onUpdateCamera={handleUpdateCamera}                            
+                onDeleteCamera={handleDeleteCamera}                            
+                currentUserRole={currentUser?.role}                            
+                contracts={contracts}                                          
+                systemDate={systemDate}                                        
+              />                                                               
+            )}                                                                 
+            {activeTab === 'revenue' && (                                      
+              currentUser?.role === 'admin' ? (                                
+                <RevenueDashboard                                              
+                  expenses={expenses}                                          
+              ) : (                                                            
+                <div className="bg-white rounded-2xl p-8 text-center border ...
+                  <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb...
+                  <h3 className="text-lg font-bold text-gray-900">KhÃ´ng cÃ³...
+                  <p className="text-sm text-gray-500 mt-1">Vui lÃ²ng Ä‘Äƒng...
+              )                                                                
+            )}                                                                 
+            {activeTab === 'customers' && (                                    
+              <CustomerManager                                                 
+                customers={customers}                                          
+                contracts={contracts}                                          
+                onAddCustomer={handleAddCustomer}                              
+                onUpdateCustomer={handleUpdateCustomer}                        
+                onDeleteCustomer={currentUser?.role === 'admin' ? handleDele...
+              />                                                               
+            )}                                                                 
+            {activeTab === 'expenses' && (                                     
+              currentUser?.role === 'admin' ? (                                
+                <ExpenseTracker                                                
+                  expenses={expenses}                                          
+                  onAddExpense={handleAddExpense}                              
+                  onDeleteExpense={handleDeleteExpense}                        
+              ) : (                                                            
+                <div className="bg-white rounded-2xl p-8 text-center border ...
+                  <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb...
+                  <h3 className="text-lg font-bold text-gray-900">KhÃ´ng cÃ³...
+                  <p className="text-sm text-gray-500 mt-1">Vui lÃ²ng Ä‘Äƒng...
+              )                                                                
+            )}                                                                 
+        {/* Modern footer */}                                                  
+        <footer className="bg-white border-t border-gray-150 py-6 text-cente...
+          <p>Â© 2026 Tiá»‡m áº£nh nhÃ  Caos. Há»‡ thá»‘ng quáº£n lÃ½ váº­n h...
+      {/* Modern Logo Customization Modal */}                                  
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex item...
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidd...
+                <div className="bg-white border border-gray-150 p-4 rounded-...
+                    <div className="w-14 h-14 rounded-full overflow-hidden b...
+                      className="w-14 h-14 rounded-full text-white shrink-0 ...
+                      {logoIconType === 'aperture' && <Aperture className="w...
+                      {logoIconType === 'film' && <Film className="w-8 h-8" />}
+                      {logoIconType === 'sparkles' && <Sparkles className="w...
+                      {logoIconType === 'smile' && <Smile className="w-8 h-8...
+                      {logoIconType === 'image' && <ImageIcon className="w-8...
+                      {(logoIconType === 'camera' || logoIconType === 'uploa...
+                    <span className="font-display font-black text-gray-950 t...
+                      {logoText || 'TIá»†M áº¢NH NHÃ€ CAOS'}                   
+                    <span className="text-[10px] text-gray-400 font-bold blo...
+                      {logoSubtitle || 'CHO THUÃŠ MÃY áº¢NH GIÃ Ráºº'}       
+                    <button                                                    
+                      type="button"                                            
+                    <button                                                    
+                      type="button"                                            
+                    </button>                                                  
+                    <button                                                    
+                      type="button"                                            
+                    >                                                          
+                    </button>                                                  
+                                                                               
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex item...
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidd...
+                                                                               
+                <button                                                        
+                  type="button"                                                
+                >                                                              
+                </button>                                                      
+                <button                                                        
+                >                                                              
+                </button>                                                      
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex item...
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidd...
+                                                                               
+                    >                                                          
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex item...
+          <div className="bg-white rounded-2xl max-w-3xl w-full overflow-hid...
+                                                                               
+                </span>                                                        
+                      <button                                                  
+                        type="button"                                          
+                      </button>                                                
+                    >                                                          
+            </div>                                                             
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex item...
+          <div className="bg-white rounded-2xl max-w-xl w-full overflow-hidd...
+                                                                               
+                </span>                                                        
+            </div>                                                             
+                                                                               
+                    <button                                                    
+                      type="button"                                            
+                    >                                                          
+                    </button>                                                  
+                  <button                                                      
+                    type="button"                                              
+                  >                                                            
+                      >                                                        
+                </div>                                                         
+              </div>                                                           
+            </div>                                                             
+            </div>                                                             
+          </div>                                                               
+  );                                                                           
+  fetchCameras,                                                                
+  fetchContracts,                                                              
+  fetchCustomers,                                                              
+  fetchExpenses,                                                               
+  upsertCamera,                                                                
+  upsertCameras,                                                               
+  upsertContract,                                                              
+  upsertContracts,                                                             
+  upsertCustomer,                                                              
+  upsertCustomers,                                                             
+  upsertExpense,                                                               
+  upsertExpenses,                                                              
+  deleteCamera,                                                                
+  deleteContract,                                                              
+  deleteCustomer,                                                              
+  deleteExpense,                                                               
+  loadSetting,                                                                 
+  saveSetting,                                                                 
+  seedSettingsFromLocal,                                                       
+  syncLocalDataToSupabase,                                                     
+} from './lib/db';                                                             
+import { isSupabaseConfigured } from './lib/supabase';                         
+import {                                                                       
+  { id: '1', username: 'admin', password: 'password', fullName: 'Quáº£n trá»...
+  const [registeredUsers, setRegisteredUsers] = useState(() =>                 
+    loadStoredData('registeredUsers', DEFAULT_USERS)                           
+  // Refs for login inputs â€” dÃ¹ng Ä‘á»ƒ Ä‘á»c giÃ¡ trá»‹ thá»±c tá»« DOM...
+  // khÃ´ng kÃ­ch hoáº¡t sá»± kiá»‡n onChange cá»§a React                      
+  const usernameRef = useRef<HTMLInputElement>(null);                          
+  const passwordRef = useRef<HTMLInputElement>(null);                          
+  // Loading state cho Supabase fetch ban Ä‘áº§u                               
+  const [dbLoading, setDbLoading] = useState<boolean>(true);                   
+  // Load states â€” sáº½ Ä‘Æ°á»£c populate bá»Ÿi useEffect async bÃªn dÆ°á»›i 
+  const [cameras, setCameras] = useState<Camera[]>([]);                        
+  const [contracts, setContracts] = useState<RentalContract[]>([]);            
+  const [customers, setCustomers] = useState<Customer[]>([]);                  
+  const [expenses, setExpenses] = useState<Expense[]>([]);                     
+    loadStoredData('logoText', 'CAMLEASE')                                     
+    loadStoredData('logoSubtitle', 'SYSTEM v1.0')                              
+  // System date â€” defaults to actual current date (not hardcoded)           
+    const now = new Date();                                                    
+    const yyyy = now.getFullYear();                                            
+    const mm = String(now.getMonth() + 1).padStart(2, '0');                    
+    const dd = String(now.getDate()).padStart(2, '0');                         
+    return `${yyyy}-${mm}-${dd}`;                                              
+  const [isDateSimulated, setIsDateSimulated] = useState<boolean>(false);      
+  const handleUpdateSystemDate = (newDate: string) => {                        
+    setSystemDate(newDate);                                                    
+    setIsDateSimulated(true);                                                  
+  const handleResetSystemDate = () => {                                        
+    const now = new Date();                                                    
+    const yyyy = now.getFullYear();                                            
+    const mm = String(now.getMonth() + 1).padStart(2, '0');                    
+    const dd = String(now.getDate()).padStart(2, '0');                         
+    setSystemDate(`${yyyy}-${mm}-${dd}`);                                      
+    setIsDateSimulated(false);                                                 
+  // Realtime clock state â€” updates every second                             
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());    
+  // Currently focused date â€” defaults to systemDate, updates to nearest b...
+  const [selectedDate, setSelectedDate] = useState<string>(systemDate);        
+  // Tráº¡ng thÃ¡i káº¿t ná»‘i Supabase trá»±c quan                            
+  const [dbStatus, setDbStatus] = useState<{                                   
+    type: 'connected' | 'offline' | 'error';                                   
+    message?: string;                                                          
+  }>(() => {                                                                   
+    if (!isSupabaseConfigured()) {                                             
+      return { type: 'offline', message: 'ChÆ°a cáº¥u hÃ¬nh biáº¿n mÃ´i trÆ°...
+    return { type: 'offline', message: 'Äang káº¿t ná»‘i...' };               
+  // â”€â”€ Fetch dá»¯ liá»‡u ban Ä‘áº§u tá»« Supabase (hoáº·c localStorage ...
+    let cancelled = false;                                                     
+    async function loadAll() {                                                 
+      setDbLoading(true);                                                      
+      if (!isSupabaseConfigured()) {                                           
+        if (!cancelled) {                                                      
+          setDbStatus({                                                        
+            type: 'offline',                                                   
+            message: 'ChÆ°a cáº¥u hÃ¬nh Supabase. á»¨ng dá»¥ng cháº¡y offlin...
+          });                                                                  
+          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));              
+          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));        
+          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));        
+          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));           
+          setDbLoading(false);                                                 
+        return;                                                                
+      try {                                                                    
+        // Kiá»ƒm tra káº¿t ná»‘i cÆ¡ sá»Ÿ dá»¯ liá»‡u thá»±c táº¿ báº±ng cÃ...
+        // Äiá»u nÃ y Ä‘áº£m báº£o Supabase Ä‘Ã£ cháº¡y SQL Editor táº¡o b...
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;       
+        const cleanUrl = supabaseUrl.endsWith('/') ? supabaseUrl.slice(0, -1...
+        const { error: testError } = await fetch(`${cleanUrl}/rest/v1/camera...
+          headers: {                                                           
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,        
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KE...
+        }).then(res => res.json().then(data => {                               
+          if (res.status >= 400) return { error: data };                       
+          return { error: null };                                              
+        })).catch(err => ({ error: err }));                                    
+        if (testError) {                                                       
+          const errMsg = testError.message || testError.hint || JSON.stringi...
+          throw new Error(errMsg);                                             
+        // Migrate settings tá»« localStorage lÃªn Supabase láº§n Ä‘áº§u (kh...
+        await seedSettingsFromLocal([                                          
+          'logoText', 'logoSubtitle', 'logoIconType', 'logoIconColor', 'logo...
+        ]);                                                                    
+        // Äá»“ng bá»™ dá»¯ liá»‡u nghiá»‡p vá»¥ (cameras, contracts, custo...
+        await syncLocalDataToSupabase();                                       
+        const [cams, cons, custs, exps, lText, lSub, lIcon, lColor, lBase, r...
+          fetchCameras(),                                                      
+          fetchContracts(),                                                    
+          fetchCustomers(),                                                    
+          fetchExpenses(),                                                     
+          loadSetting('logoText', 'CAMLEASE'),                                 
+          loadSetting('logoSubtitle', 'SYSTEM v1.0'),                          
+          loadSetting('logoIconType', 'camera'),                               
+          loadSetting('logoIconColor', '#ea580c'),                             
+          loadSetting('logoBase64', ''),                                       
+          loadSetting('registeredUsers', DEFAULT_USERS),                       
+        ]);                                                                    
+        if (!cancelled) {                                                      
+          setCameras(cams);                                                    
+          setContracts(cons);                                                  
+          setCustomers(custs);                                                 
+          setExpenses(exps);                                                   
+          setLogoText(lText);                                                  
+          setLogoSubtitle(lSub);                                               
+          setLogoIconType(lIcon as any);                                       
+          setLogoIconColor(lColor);                                            
+          setLogoBase64(lBase);                                                
+          setRegisteredUsers(rUsers);                                          
+          // Äá»“ng bá»™ thÃ´ng tin currentUser tá»« danh sÃ¡ch registeredU...
+          if (currentUser) {                                                   
+            const freshUser = rUsers.find(u => u.id === currentUser.id);       
+            if (freshUser) {                                                   
+              setCurrentUser(freshUser);                                       
+          setDbStatus({                                                        
+            type: 'connected',                                                 
+            message: 'Äá»“ng bá»™ Supabase thÃ nh cÃ´ng!'                     
+          });                                                                  
+      } catch (err: any) {                                                     
+        console.error('[App] loadAll error:', err);                            
+        if (!cancelled) {                                                      
+          setCameras(loadStoredData('cameras', INITIAL_CAMERAS));              
+          setContracts(loadStoredData('contracts', INITIAL_CONTRACTS));        
+          setCustomers(loadStoredData('customers', INITIAL_CUSTOMERS));        
+          setExpenses(loadStoredData('expenses', INITIAL_EXPENSES));           
+          let friendlyMsg = err?.message || 'Lá»—i khÃ´ng xÃ¡c Ä‘á»‹nh';       
+          if (friendlyMsg.includes('relation') && friendlyMsg.includes('does...
+            friendlyMsg = 'Báº£ng cameras chÆ°a Ä‘Æ°á»£c táº¡o. HÃ£y cháº¡y ...
+          } else if (friendlyMsg.includes('Failed to fetch')) {                
+            friendlyMsg = 'KhÃ´ng thá»ƒ káº¿t ná»‘i Internet hoáº·c URL dá»±...
+          } else if (friendlyMsg.includes('Invalid API key') || friendlyMsg....
+            friendlyMsg = 'MÃ£ Anon Key cá»§a Supabase khÃ´ng há»£p lá»‡ hoá...
+          setDbStatus({                                                        
+            type: 'error',                                                     
+            message: `Lá»—i Supabase: ${friendlyMsg} (ÄÃ£ chuyá»ƒn vá» Loc...
+          });                                                                  
+      } finally {                                                              
+        if (!cancelled) setDbLoading(false);                                   
+    loadAll();                                                                 
+    return () => { cancelled = true; };                                        
+  // â”€â”€ Realtime clock: cáº­p nháº­t má»—i giÃ¢y â”€â”€â”€â”€â”€â”€â”€â”...
+    const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);     
+    return () => clearInterval(timer);                                         
+  }, []);                                                                      
+  // â”€â”€ Tá»± Ä‘á»™ng cáº­p nháº­t ngÃ y há»‡ thá»‘ng theo thá»i gian th...
+    if (!isDateSimulated) {                                                    
+      const yyyy = currentDateTime.getFullYear();                              
+      const mm = String(currentDateTime.getMonth() + 1).padStart(2, '0');      
+      const dd = String(currentDateTime.getDate()).padStart(2, '0');           
+      const todayStr = `${yyyy}-${mm}-${dd}`;                                  
+      if (systemDate !== todayStr) {                                           
+        setSystemDate(todayStr);                                               
+  }, [currentDateTime, isDateSimulated, systemDate]);                          
+  // â”€â”€ Sync settings & auth vá» localStorage & Supabase â”€â”€â”€â”€â”...
+    if (dbLoading) return;                                                     
+    saveSetting('logoText', logoText);                                         
+  }, [logoText, dbLoading]);                                                   
+    if (dbLoading) return;                                                     
+    saveSetting('logoSubtitle', logoSubtitle);                                 
+  }, [logoSubtitle, dbLoading]);                                               
+    if (dbLoading) return;                                                     
+    saveSetting('logoIconType', logoIconType);                                 
+  }, [logoIconType, dbLoading]);                                               
+    if (dbLoading) return;                                                     
+    saveSetting('logoIconColor', logoIconColor);                               
+  }, [logoIconColor, dbLoading]);                                              
+    if (dbLoading) return;                                                     
+    saveSetting('logoBase64', logoBase64);                                     
+  }, [logoBase64, dbLoading]);                                                 
+    if (dbLoading) return;                                                     
+    saveSetting('registeredUsers', registeredUsers);                           
+  }, [registeredUsers, dbLoading]);                                            
+  useEffect(() => { saveStoredData('currentUser', currentUser); }, [currentU...
+  useEffect(() => { saveStoredData('camlease_snapshots', snapshots); }, [sna...
+  // LuÃ´n Ä‘á»“ng bá»™ dá»¯ liá»‡u nghiá»‡p vá»¥ vá» localStorage lÃ m loc...
+    if (dbLoading) return;                                                     
+  }, [cameras, dbLoading]);                                                    
+    if (dbLoading) return;                                                     
+  }, [contracts, dbLoading]);                                                  
+    if (dbLoading) return;                                                     
+  }, [customers, dbLoading]);                                                  
+    if (dbLoading) return;                                                     
+  }, [expenses, dbLoading]);                                                   
+  // â”€â”€ Cáº­p nháº­t selectedDate vá» ngÃ y há»£p Ä‘á»“ng gáº§n nháº¥t ...
+    if (contracts.length === 0) return;                                        
+    const systemTime = new Date(systemDate).getTime();                         
+    let closestDate = systemDate;                                              
+    contracts.forEach((c: RentalContract) => {                                 
+        if (diff < minDiff) { minDiff = diff; closestDate = dStr; }            
+    setSelectedDate(closestDate);                                              
+  // eslint-disable-next-line react-hooks/exhaustive-deps                      
+  }, [contracts.length > 0 ? contracts[0]?.id : null]);                        
+      if (parsed.systemDate) {                                                 
+        setSystemDate(parsed.systemDate);                                      
+        setIsDateSimulated(true);                                              
+      if (snap.systemDate) {                                                   
+        setSystemDate(snap.systemDate);                                        
+        setIsDateSimulated(true);                                              
+    upsertContract(newContract); // sync to Supabase                           
+    setCameras(prevCams => {                                                   
+      const updated = prevCams.map(cam => {                                    
+      upsertCameras(updated); // sync cameras to Supabase                      
+      return updated;                                                          
+        cust => cust.phone === newContract.customerPhone ||                    
+                cust.name.toLowerCase() === newContract.customerName.toLower...
+      let updated: Customer[];                                                 
+        updated = [...prevCusts, newCustomer];                                 
+        upsertCustomer(newCustomer); // sync to Supabase                       
+      } else {                                                                 
+        updated = prevCusts.map(cust => {                                      
+          if (cust.name.toLowerCase() === newContract.customerName.toLowerCa...
+            const updatedCust = { ...cust, rentalCount: cust.rentalCount + 1 };
+            upsertCustomer(updatedCust);                                       
+            return updatedCust;                                                
+          return cust;                                                         
+      return updated;                                                          
+            cust => cust.phone === c.customerPhone ||                          
+                    cust.name.toLowerCase() === c.customerName.toLowerCase()   
+              ct => ct.customerPhone === c.customerPhone ||                    
+                    ct.customerName.toLowerCase() === c.customerName.toLower...
+            upsertCustomer(newCustomer); // sync to Supabase                   
+        });                                                                    
+            note: note ? `${c.note || ''}\n[Cáº­p nháº­t]: ${note}` : c.note,  
+            paidAmount: paidAmount !== undefined ? paidAmount : c.paidAmount   
+          upsertContract(updatedContract); // sync to Supabase                 
+            setCameras(prevCams => {                                           
+              const updated = prevCams.map(cam => {                            
+              });                                                              
+              upsertCameras(updated);                                          
+              return updated;                                                  
+            });                                                                
+            setCameras(prevCams => {                                           
+              const updated = prevCams.map(cam => {                            
+              });                                                              
+              upsertCameras(updated);                                          
+              return updated;                                                  
+            });                                                                
+          }                                                                    
+          const updated = { ...c, note };                                      
+          upsertContract(updated); // sync to Supabase                         
+          return updated;                                                      
+    deleteContract(id); // sync to Supabase                                    
+    setCameras(prevCams => {                                                   
+      const updated = prevCams.map(cam => {                                    
+          }                                                                    
+      });                                                                      
+      upsertCameras(updated);                                                  
+      return updated;                                                          
+        if (                                                                   
+          cust.name.toLowerCase() === contractToDelete.customerName.toLowerC...
+          cust.phone === contractToDelete.customerPhone                        
+        ) {                                                                    
+          const updated = { ...cust, rentalCount: Math.max(0, cust.rentalCou...
+          upsertCustomer(updated);                                             
+          return updated;                                                      
+        }                                                                      
+    upsertCamera(newCam); // sync to Supabase                                  
+    upsertCamera(updatedCam); // sync to Supabase                              
+    deleteCamera(id); // sync to Supabase                                      
+    upsertCustomer(newCust); // sync to Supabase                               
+    upsertCustomer(updatedCust); // sync to Supabase                           
+    deleteCustomer(id); // sync to Supabase                                    
+    upsertExpense(newExp); // sync to Supabase                                 
+    deleteExpense(id); // sync to Supabase                                     
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {               
+    try {                                                                      
+      // DÃ¹ng FormData Ä‘á»ƒ Ä‘á»c giÃ¡ trá»‹ thá»±c tá»« form â€” cÃ¡ch Ä...
+      // báº¯t Ä‘Æ°á»£c cáº£ trÆ°á»ng há»£p trÃ¬nh duyá»‡t autofill khÃ´ng ...
+      const formData = new FormData(e.currentTarget);                          
+      const rawUsername = (formData.get('username') as string | null)          
+        ?? usernameRef.current?.value                                          
+        ?? usernameInput;                                                      
+      const rawPassword = (formData.get('password') as string | null)          
+        ?? passwordRef.current?.value                                          
+        ?? passwordInput;                                                      
+      const username = (rawUsername ?? '').trim().toLowerCase();               
+      const password = rawPassword ?? '';                                      
+      // Kiá»ƒm tra registeredUsers há»£p lá»‡ trÆ°á»›c khi tÃ¬m kiáº¿m        
+      if (!Array.isArray(registeredUsers) || registeredUsers.length === 0) {   
+        console.error('[Login] registeredUsers is empty or invalid:', regist...
+        setLoginError('Lá»—i há»‡ thá»‘ng: KhÃ´ng táº£i Ä‘Æ°á»£c danh sÃ¡ch ...
+        return;                                                                
+      }                                                                        
+      const foundUser = registeredUsers.find(                                  
+        u => u.username.toLowerCase() === username && u.password === password  
+      if (foundUser) {                                                         
+        setCurrentUser(foundUser);                                             
+        setLoginError('');                                                     
+        setUsernameInput('');                                                  
+        setPasswordInput('');                                                  
+      } else {                                                                 
+        setLoginError('TÃ i khoáº£n hoáº·c máº­t kháº©u khÃ´ng chÃ­nh xÃ¡c!'); 
+      }                                                                        
+    } catch (err) {                                                            
+      console.error('[Login] Unexpected error during login:', err);            
+      setLoginError('ÄÃ£ xáº£y ra lá»—i khi Ä‘Äƒng nháº­p. Vui lÃ²ng thá»­ ...
+      }                                                                        
+      }                                                                        
+    });                                                                        
+      }                                                                        
+    });                                                                        
+  };                                                                           
+  };                                                                           
+  // Hiá»ƒn thá»‹ mÃ n hÃ¬nh loading khi Ä‘ang fetch dá»¯ liá»‡u tá»« Supabase 
+  if (dbLoading) {                                                             
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center j...
+        <div className="relative">                                             
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orang...
+            <Aperture className="w-8 h-8 text-white animate-spin" style={{ a...
+        <div className="text-center space-y-1.5">                              
+          <p className="text-white font-bold text-lg tracking-tight">{logoTe...
+          <p className="text-slate-400 text-sm">Äang káº¿t ná»‘i cÆ¡ sá»Ÿ d...
+        <div className="flex gap-1.5 mt-2">                                    
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce...
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce...
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce...
+    return (                                                                   
+        {/* Left decoration panel with customizable brand colors and Unsplas...
+        <div className="w-full md:w-5/12 lg:w-6/12 xl:w-7/12 bg-slate-900 te...
+          <div className="flex items-center gap-3.5 relative z-10 bg-slate-9...
+              <div className="w-10 h-10 rounded-xl overflow-hidden border bo...
+                className="w-10 h-10 rounded-xl text-white shadow-lg flex it...
+                {logoIconType === 'aperture' && <Aperture className="w-5.5 h...
+                {logoIconType === 'film' && <Film className="w-5.5 h-5.5" />}  
+                {logoIconType === 'sparkles' && <Sparkles className="w-5.5 h...
+                {logoIconType === 'smile' && <Smile className="w-5.5 h-5.5" />}
+                {logoIconType === 'image' && <ImageIcon className="w-5.5 h-5...
+                {(logoIconType === 'camera' || logoIconType === 'upload') &&...
+            <div className="leading-tight pr-2">                               
+              <span className="font-sans font-black text-white text-base tra...
+                {logoText || 'CAMLEASE'}                                       
+              <span className="text-[9px] text-slate-400 font-mono block tra...
+            <div className="flex flex-wrap gap-2 items-center">                
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 ...
+                <ShieldCheck className="w-3.5 h-3.5 mr-0.5 animate-pulse" />...
+              <span                                                            
+                className={`inline-flex items-center gap-1 px-3 py-1 text-[1...
+                  dbStatus.type === 'connected'                                
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-...
+                    : dbStatus.type === 'error'                                
+                      ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'      
+                      : 'bg-amber-500/10 border-amber-500/20 text-amber-400'   
+                }`}                                                            
+                title={dbStatus.message}                                       
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${         
+                  dbStatus.type === 'connected' ? 'bg-emerald-400 animate-pu...
+                  dbStatus.type === 'error' ? 'bg-rose-400' : 'bg-amber-400'   
+                }`} />                                                         
+                {dbStatus.type === 'connected' ? 'Supabase connected' :        
+                 dbStatus.type === 'error' ? 'Database error' : 'Offline Mode'}
+            <span>Â© 2026 {logoText || 'CAMLEASE'} Enterprise Suite â€¢ Káº¿...
+        <div className="flex-1 bg-slate-950 flex flex-col justify-center p-6...
+            <div className="bg-slate-900 border border-slate-800 p-6 sm:p-9 ...
+                          ref={usernameRef}                                    
+                          name="username"                                      
+                          autoComplete="username"                              
+                          ref={passwordRef}                                    
+                          name="password"                                      
+                          autoComplete="current-password"                      
+                          className="w-full pl-10 pr-10 py-2.5 bg-slate-950 ...
+                        onClick={() => handleAutofill('admin', 'password')}    
+                          <span className="text-[9px] text-slate-500 font-mo...
+                          name="username"                                      
+                          autoComplete="username"                              
+                          name="password"                                      
+                          autoComplete="new-password"                          
+  }                                                                            
+    <div className="min-h-screen bg-slate-50 font-sans select-none antialias...
+      {/* ===== SIDEBAR (Desktop only) ===== */}                               
+      <aside className="hidden md:flex flex-col w-60 bg-slate-900 fixed inse...
+        {/* Logo / Branding - click to customize */}                           
+        <div                                                                   
+          className="flex items-center gap-2.5 px-4 py-3 cursor-pointer hove...
+          title="Nháº¥p Ä‘á»ƒ thay Ä‘á»•i Logo & ThÆ°Æ¡ng hiá»‡u"              
+            <div className="w-7 h-7 rounded-lg overflow-hidden border border...
+              <img src={logoBase64} alt="Custom Logo" className="w-full h-fu...
+            <span                                                              
+              className="w-7 h-7 rounded-lg text-white shrink-0 flex items-c...
+              {logoIconType === 'aperture' && <Aperture className="w-4 h-4" />}
+              {logoIconType === 'film' && <Film className="w-4 h-4" />}        
+              {logoIconType === 'sparkles' && <Sparkles className="w-4 h-4 t...
+              {logoIconType === 'smile' && <Smile className="w-4 h-4" />}      
+              {logoIconType === 'image' && <ImageIcon className="w-4 h-4" />}  
+              {(logoIconType === 'camera' || logoIconType === 'upload') && <...
+          <div className="leading-tight min-w-0">                              
+            <span className="font-black text-white text-xs tracking-widest u...
+              {logoText || 'CAMLEASE'}                                         
+            <span className="text-[9px] text-slate-500 font-mono tracking-wi...
+        {/* Navigation Items */}                                               
+        <nav className="flex-1 px-3 py-4 overflow-y-auto scrollbar-none">      
+          <div className="mb-2 px-3">                                          
+            <span className="text-[9px] font-extrabold text-slate-500 upperc...
+          <div className="space-y-0.5">                                        
+          {([                                                                  
+            { key: 'calendar' as const, icon: <Calendar className="w-4.5 h-4...
+            { key: 'contracts' as const, icon: <FileText className="w-4.5 h-...
+            { key: 'equipment' as const, icon: <CameraIcon className="w-4.5 ...
+            { key: 'customers' as const, icon: <Users className="w-4.5 h-4.5...
+            { key: 'revenue' as const, icon: <TrendingUp className="w-4.5 h-...
+            { key: 'expenses' as const, icon: <DollarSign className="w-4.5 h...
+          ] as const).filter(item => item.show).map(item => (                  
+            <button                                                            
+              key={item.key}                                                   
+              type="button"                                                    
+              onClick={() => setActiveTab(item.key)}                           
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-x...
+                activeTab === item.key                                         
+                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/40'  
+                  : 'text-slate-200 hover:text-white hover:bg-slate-800'       
+              }`}                                                              
+              <span className={`transition-colors shrink-0 ${                  
+                activeTab === item.key                                         
+                  ? 'text-white'                                               
+                  : 'text-slate-400 group-hover:text-orange-400'               
+              }`}>                                                             
+                {item.icon}                                                    
+              </span>                                                          
+              <div className="min-w-0 flex-1">                                 
+                <span className="text-xs font-bold block truncate leading-ti...
+                <span className={`text-[10px] block truncate leading-tight m...
+                  activeTab === item.key ? 'text-orange-200' : 'text-slate-5...
+                }`}>{item.desc}</span>                                         
+              {activeTab === item.key && <ChevronRight className="w-3.5 h-3....
+            </button>                                                          
+          ))}                                                                  
+        {/* System status indicator */}                                        
+        <div className="px-3 py-3 border-t border-slate-700/60">               
+          <div className="px-3 py-2.5 rounded-xl bg-slate-800 border border-...
+            <div className="flex items-center gap-2 mb-1">                     
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-p...
+              <span className="text-[9px] font-extrabold text-emerald-400 up...
+              {isDateSimulated && (                                            
+                <span className="ml-auto text-[8px] font-extrabold text-oran...
+            <span className="text-sm font-mono font-bold text-slate-200 block">
+              {systemDate ? systemDate.split('-').reverse().join('/') : '--/...
+        {/* User Profile at Sidebar Bottom */}                                 
+        <div className="p-3 border-t border-slate-700/60 relative">            
+            onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}       
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl...
+            <div className="w-9 h-9 rounded-xl overflow-hidden border-2 bord...
+              <img                                                             
+                src={currentUser?.avatar || 'https://images.unsplash.com/pho...
+                alt="Avatar"                                                   
+                className="w-full h-full object-cover"                         
+            <div className="flex-1 min-w-0 text-left">                         
+              <span className="text-sm font-bold text-white block truncate">...
+              <span className={`text-[10px] font-extrabold uppercase trackin...
+                currentUser?.role === 'admin' ? 'text-orange-400' : 'text-sl...
+              }`}>                                                             
+                {currentUser?.role === 'admin' ? 'Admin' : 'Staff'}            
+              </span>                                                          
+            <Settings className="w-4 h-4 text-slate-500 group-hover:text-sla...
+          {/* Profile Dropdown - opens upward */}                              
+          {profileDropdownOpen && (                                            
+              <div className="fixed inset-0 z-40 cursor-default" onClick={()...
+              <div className="absolute bottom-full left-3 right-3 mb-2 bg-wh...
+                <div className="px-4 pb-2.5 border-b border-gray-100 select-...
+                  <span className="block text-[10px] text-gray-400 font-bold...
+                  <span className="block text-sm font-bold text-gray-900 mt-...
+                  <span className="text-xs text-gray-400 font-mono">@{curren...
+                  <div className="mt-1.5 flex items-center gap-1.5">           
+                    <span className={`w-2 h-2 rounded-full ${currentUser?.ro...
+                    <span className="text-[10px] font-bold uppercase trackin...
+                      {currentUser?.role === 'admin' ? 'Quyá»n Háº¡n: Admin...
+                <div className="pt-1.5 pb-1 px-1.5 space-y-0.5">               
+                  <button type="button" onClick={() => { setProfileDropdownO...
+                    <Key className="w-4 h-4 text-gray-400 shrink-0" /><span>...
+                  <button type="button" onClick={() => { setProfileDropdownO...
+                    <User className="w-4 h-4 text-gray-400 shrink-0" /><span...
+                  {currentUser?.role === 'admin' && (                          
+                    <button type="button" onClick={() => { setProfileDropdow...
+                      <Settings className="w-4 h-4 text-gray-400 shrink-0" /...
+                  <button type="button" onClick={() => { setProfileDropdownO...
+                    <Database className="w-4 h-4 text-orange-500 shrink-0" /...
+                  <div className="h-px bg-gray-100 my-1 mx-2" />               
+                  <button type="button" onClick={handleLogout} className="w-...
+                    <LogOut className="w-4 h-4 shrink-0" /><span>ÄÄƒng xuáº...
+      {/* ===== MAIN CONTENT AREA ===== */}                                    
+      <div className="flex-1 md:ml-60 flex flex-col min-h-screen">             
+        {/* TOP BAR */}                                                        
+        <header className="bg-white/90 backdrop-blur-md border-b border-gray...
+          <div className="flex items-center justify-between h-14 px-4 sm:px-...
+            {/* Left Section: Mobile Logo */}                                  
+            <div className="flex items-center md:hidden shrink-0">             
+                onClick={() => setShowLogoModal(true)}                         
+                className="flex items-center gap-2 mr-1 active:scale-95 tran...
+                {logoIconType === 'upload' && logoBase64 ? (                   
+                  <div className="w-8.5 h-8.5 rounded-xl overflow-hidden bor...
+                    <img src={logoBase64} alt="Logo" className="w-full h-ful...
+                ) : (                                                          
+                  <span className="w-8.5 h-8.5 rounded-xl text-white flex it...
+                    {logoIconType === 'aperture' && <Aperture className="w-4...
+                    {logoIconType === 'film' && <Film className="w-4.5 h-4.5...
+                    {logoIconType === 'sparkles' && <Sparkles className="w-4...
+                    {logoIconType === 'smile' && <Smile className="w-4.5 h-4...
+                    {logoIconType === 'image' && <ImageIcon className="w-4.5...
+                    {(logoIconType === 'camera' || logoIconType === 'upload'...
+                  </span>                                                      
+            {/* Center Section: Breadcrumb & Title */}                         
+            <div className="flex-1 min-w-0 flex items-center justify-start m...
+              <div className="flex items-center gap-2 max-md:text-center">     
+                <span className="text-[10px] font-bold text-orange-500 upper...
+                <ChevronRight className="w-3 h-3 text-gray-300 hidden sm:blo...
+                <h1 className="text-sm md:text-base font-extrabold text-gray...
+                  {activeTab === 'calendar' && 'Lá»‹ch mÃ¡y'}                  
+                  {activeTab === 'contracts' && 'ÄÆ¡n thuÃª'}                 
+                  {activeTab === 'equipment' && 'Kho thiáº¿t bá»‹'}            
+                  {activeTab === 'revenue' && 'BÃ¡o cÃ¡o doanh thu'}           
+                  {activeTab === 'customers' && 'Há»“ sÆ¡ khÃ¡ch hÃ ng'}       
+                  {activeTab === 'expenses' && 'Nháº­t kÃ½ khoáº£n chi'}       
+                </h1>                                                          
+            {/* Right Section: Badges & Controls */}                           
+            <div className="flex items-center gap-2 shrink-0">                 
+              {/* Live date badge */}                                          
+              <div className="hidden sm:flex items-center gap-1.5 text-[10px...
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ani...
+                <span className="font-bold text-gray-600">{systemDate}</span>  
+              {/* Notification Center */}                                      
+              <NotificationCenter                                              
+                setSystemDate={handleUpdateSystemDate}                         
+                isDateSimulated={isDateSimulated}                              
+                onResetSystemDate={handleResetSystemDate}                      
+              {/* Mobile: Profile button */}                                   
+              <div className="md:hidden relative shrink-0">                    
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)} 
+                  className="w-8.5 h-8.5 rounded-xl overflow-hidden border b...
+                  <img                                                         
+                    src={currentUser?.avatar || 'https://images.unsplash.com...
+                    alt="Avatar"                                               
+                    className="w-full h-full object-cover"                     
+                {profileDropdownOpen && (                                      
+                  <>                                                           
+                    <div className="fixed inset-0 z-40 cursor-default" onCli...
+                    <div className="absolute right-0 top-full mt-2 w-60 bg-w...
+                      <div className="px-4 pb-2.5 border-b border-gray-100 s...
+                        <span className="block text-[10px] text-gray-400 fon...
+                        <span className="block text-sm font-bold text-gray-9...
+                        <span className="text-xs text-gray-400 font-mono">@{...
+                      <div className="pt-1.5 pb-1 px-1.5 space-y-0.5">         
+                        <button type="button" onClick={() => { setProfileDro...
+                        <button type="button" onClick={() => { setProfileDro...
+                        {currentUser?.role === 'admin' && <button type="butt...
+                        <button type="button" onClick={() => { setProfileDro...
+                        <div className="h-px bg-gray-100 my-1 mx-2" />         
+                        <button type="button" onClick={handleLogout} classNa...
+                  </>                                                          
+        {/* MAIN CONTENT */}                                                   
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-36 md:pb-8">              
+          <div className="max-w-7xl mx-auto space-y-6">                        
+            {/* Page Section Header */}                                        
+            <div className="flex flex-col sm:flex-row sm:items-center justif...
+                <span className="text-[10px] font-extrabold uppercase tracki...
+                <h2 className="text-2xl font-display font-bold text-gray-950...
+                  {activeTab === 'calendar' && 'Lá»‹ch mÃ¡y'}                  
+                  {activeTab === 'contracts' && 'Há»£p Ä‘á»“ng & ÄÆ¡n thuÃª'} 
+                  {activeTab === 'equipment' && 'Kho thiáº¿t bá»‹'}            
+                  {activeTab === 'revenue' && 'BÃ¡o cÃ¡o doanh thu'}           
+                  {activeTab === 'customers' && 'Há»“ sÆ¡ khÃ¡ch hÃ ng'}       
+                  {activeTab === 'expenses' && 'Nháº­t kÃ½ khoáº£n chi'}       
+                </h2>                                                          
+              <div className="text-xs text-gray-400 bg-white border border-g...
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate...
+                <span>Cáº­p nháº­t má»›i nháº¥t:</span>                        
+                <span className="font-mono font-bold text-gray-700">HÃ´m nay...
+            {/* Active Tab Content */}                                         
+            <div className="animate-fade-in">                                  
+              {activeTab === 'calendar' && (                                   
+                <BookingCalendar                                               
+                  onAddContract={handleAddContract}                            
+                  onDeleteContract={currentUser?.role === 'admin' ? handleDe...
+                  selectedDate={selectedDate}                                  
+                  setSelectedDate={setSelectedDate}                            
+                  systemDate={systemDate}                                      
+              {activeTab === 'contracts' && (                                  
+                <ContractManager                                               
+                  contracts={contracts}                                        
+                  cameras={cameras}                                            
+                  onAddContract={handleAddContract}                            
+                  onUpdateContractStatus={handleUpdateContractStatus}          
+                  onDeleteContract={currentUser?.role === 'admin' ? handleDe...
+                  onUpdateContractNote={handleUpdateContractNote}              
+                  systemDate={systemDate}                                      
+              )}                                                               
+              {activeTab === 'equipment' && (                                  
+                <EquipmentTracker                                              
+                  cameras={cameras}                                            
+                  onAddCamera={handleAddCamera}                                
+                  onUpdateCamera={handleUpdateCamera}                          
+                  onDeleteCamera={handleDeleteCamera}                          
+                  currentUserRole={currentUser?.role}                          
+                  contracts={contracts}                                        
+                  systemDate={systemDate}                                      
+              )}                                                               
+              {activeTab === 'revenue' && (                                    
+                currentUser?.role === 'admin' ? (                              
+                  <RevenueDashboard                                            
+                    contracts={contracts}                                      
+                    expenses={expenses}                                        
+                    cameras={cameras}                                          
+                ) : (                                                          
+                  <div className="bg-white rounded-2xl p-8 text-center borde...
+                    <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto ...
+                    <h3 className="text-lg font-bold text-gray-900">KhÃ´ng c...
+                    <p className="text-sm text-gray-500 mt-1">Vui lÃ²ng Ä‘Äƒ...
+                )                                                              
+              )}                                                               
+              {activeTab === 'customers' && (                                  
+                <CustomerManager                                               
+                  customers={customers}                                        
+                  contracts={contracts}                                        
+                  onAddCustomer={handleAddCustomer}                            
+                  onUpdateCustomer={handleUpdateCustomer}                      
+                  onDeleteCustomer={currentUser?.role === 'admin' ? handleDe...
+              )}                                                               
+              {activeTab === 'expenses' && (                                   
+                currentUser?.role === 'admin' ? (                              
+                  <ExpenseTracker                                              
+                    expenses={expenses}                                        
+                    onAddExpense={handleAddExpense}                            
+                    onDeleteExpense={handleDeleteExpense}                      
+                ) : (                                                          
+                  <div className="bg-white rounded-2xl p-8 text-center borde...
+                    <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto ...
+                    <h3 className="text-lg font-bold text-gray-900">KhÃ´ng c...
+                    <p className="text-sm text-gray-500 mt-1">Vui lÃ²ng Ä‘Äƒ...
+                )                                                              
+              )}                                                               
+        {/* Footer inside content area */}                                     
+        <footer className="bg-white border-t border-gray-100 py-5 mt-6 text-...
+          <p>Â© 2026 Tiá»‡m áº¢nh NhÃ  CAOS. Há»‡ thá»‘ng quáº£n lÃ½ cho thu...
+        {/* Mobile: Fixed Bottom Navigation Bar */}                            
+        <div className="md:hidden fixed bottom-4 left-4 right-4 z-40 ios-gla...
+          <nav className="flex items-center justify-around px-2 py-1.5">       
+            {([                                                                
+              { key: 'calendar' as const, icon: <Calendar className="w-5 h-5...
+              { key: 'contracts' as const, icon: <FileText className="w-5 h-...
+              { key: 'equipment' as const, icon: <CameraIcon className="w-5 ...
+              { key: 'customers' as const, icon: <Users className="w-5 h-5" ...
+              { key: 'revenue' as const, icon: <TrendingUp className="w-5 h-...
+              { key: 'expenses' as const, icon: <DollarSign className="w-5 h...
+            ] as const).filter(item => item.show).map(item => (                
+                key={item.key}                                                 
+                onClick={() => setActiveTab(item.key)}                         
+                className={`relative flex flex-col items-center justify-cent...
+                  activeTab === item.key                                       
+                    ? 'text-orange-600 font-extrabold'                         
+                    : 'text-gray-400 hover:text-gray-600 font-medium'          
+                }`}                                                            
+                <div className={`p-1.5 rounded-xl transition-all duration-35...
+                  activeTab === item.key                                       
+                    ? 'bg-orange-500/10 text-orange-600 scale-110 shadow-xs'   
+                    : 'bg-transparent text-gray-400'                           
+                }`}>                                                           
+                  {item.icon}                                                  
+                <span className="text-[9px] tracking-wide leading-none">{ite...
+                {activeTab === item.key && (                                   
+                  <span className="absolute bottom-0.5 w-1 h-1 rounded-full ...
+            ))}                                                                
+          </nav>                                                               
+      </div>                                                                   
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur...
+          <div className="ios-bottom-sheet md:max-w-lg w-full overflow-hidde...
+            {/* iOS Pull Handle */}                                            
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx...
+              <div>                                                            
+                <div className="bg-white border border-gray-150 p-3.5 rounde...
+                    <div className="w-10 h-10 rounded-full overflow-hidden b...
+                      className="p-2.5 rounded-full text-white shrink-0 flex...
+                      {logoIconType === 'aperture' && <Aperture className="w...
+                      {logoIconType === 'film' && <Film className="w-5.5 h-5...
+                      {logoIconType === 'sparkles' && <Sparkles className="w...
+                      {logoIconType === 'smile' && <Smile className="w-5.5 h...
+                      {logoIconType === 'image' && <ImageIcon className="w-5...
+                      {(logoIconType === 'camera' || logoIconType === 'uploa...
+                    <span className="font-display font-bold text-gray-950 te...
+                      {logoText || 'CAMLEASE'}                                 
+                    <span className="text-[10px] text-gray-400 font-mono blo...
+                      {logoSubtitle || 'SYSTEM v1.0'}                          
+                    </span>                                                    
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur...
+          <div className="ios-bottom-sheet md:max-w-md w-full overflow-hidde...
+            {/* iOS Pull Handle */}                                            
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx...
+                    name="current-password"                                    
+                    autoComplete="current-password"                            
+                    name="new-password"                                        
+                    autoComplete="new-password"                                
+                    name="confirm-password"                                    
+                    autoComplete="new-password"                                
+                  />                                                           
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur...
+          <div className="ios-bottom-sheet md:max-w-lg w-full overflow-hidde...
+            {/* iOS Pull Handle */}                                            
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx...
+                  />                                                           
+                />                                                             
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur...
+          <div className="ios-bottom-sheet md:max-w-3xl w-full overflow-hidd...
+            {/* iOS Pull Handle */}                                            
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx...
+                )}                                                             
+                  </div>                                                       
+                  </button>                                                    
+                      </div>                                                   
+                                                                               
+        </div>                                                                 
+                                                                               
+        <div className="ios-bottom-sheet-container bg-black/60 backdrop-blur...
+          <div className="ios-bottom-sheet md:max-w-xl w-full overflow-hidde...
+            {/* iOS Pull Handle */}                                            
+            <div className="md:hidden w-12 h-1.5 bg-gray-300 rounded-full mx...
+              >                                                                
+                                                                               
+                                                                               
+                  </button>                                                    
+                                                                               
+                  </div>                                                       
+                                                                               
+                                                                               
+                  </div>                                                       
+                )}                                                             
+                                                                               
+                                                                               
+                  />                                                           
+                  </button>                                                    
+                                                                               
+                      </div>                                                   
+                  )}                                                           
+                                                                               
+                                                                               
+              <button                                                          
+                type="button"                                                  
+              >                                                                
+              </button>                                                        
+                                                                               
+        </div>                                                                 
+                                                                               
+                                                                               
+
+
