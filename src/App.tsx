@@ -116,6 +116,11 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
 
+  // Refs for login inputs — dùng để đọc giá trị thực từ DOM khi trình duyệt autofill
+  // không kích hoạt sự kiện onChange của React
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
   // Register Input States
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [regUsername, setRegUsername] = useState('');
@@ -906,9 +911,14 @@ export default function App() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    const username = usernameInput.trim().toLowerCase();
+    // Đọc giá trị từ DOM ref để xử lý trường hợp trình duyệt autofill
+    // không kích hoạt sự kiện onChange của React (controlled input bị bỏ qua)
+    const rawUsername = usernameRef.current?.value ?? usernameInput;
+    const rawPassword = passwordRef.current?.value ?? passwordInput;
+    const username = rawUsername.trim().toLowerCase();
+    const password = rawPassword;
     const foundUser = registeredUsers.find(
-      u => u.username.toLowerCase() === username && u.password === passwordInput
+      u => u.username.toLowerCase() === username && u.password === password
     );
     if (foundUser) {
       setCurrentUser(foundUser);
@@ -1274,6 +1284,7 @@ export default function App() {
                           <User className="w-4 h-4" />
                         </span>
                         <input
+                          ref={usernameRef}
                           type="text"
                           name="username"
                           autoComplete="username"
@@ -1312,6 +1323,7 @@ export default function App() {
                           <Lock className="w-4 h-4" />
                         </span>
                         <input
+                          ref={passwordRef}
                           type={showPassword ? 'text' : 'password'}
                           name="password"
                           autoComplete="current-password"
